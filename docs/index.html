@@ -1,0 +1,1196 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GTFS → CZML / GeoJSON ツール</title>
+  <style>
+    :root {
+      --bg: #f4f8ff;
+      --bg2: #eef4ff;
+      --card: #ffffff;
+      --line: #d7e4ff;
+      --line-strong: #bfd2ff;
+      --text: #1f2a44;
+      --muted: #62718f;
+      --primary: #4f7cff;
+      --primary-2: #7aa2ff;
+      --accent: #27b3a7;
+      --soft: #f7fbff;
+      --soft-blue: #edf3ff;
+      --soft-green: #eefcf9;
+      --warn-bg: #fff6e8;
+      --warn-line: #ffd79a;
+      --shadow: 0 14px 32px rgba(76, 112, 177, 0.12);
+      --radius: 22px;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, #ffffff 0%, #f6f9ff 42%, #edf3ff 100%);
+    }
+
+    .wrap {
+      max-width: 1360px;
+      margin: 0 auto;
+      padding: 28px 22px 40px;
+    }
+
+    .hero {
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: flex-start;
+      margin-bottom: 18px;
+      flex-wrap: wrap;
+    }
+
+    .hero h1 {
+      margin: 0;
+      font-size: clamp(28px, 4vw, 42px);
+      line-height: 1.15;
+      letter-spacing: .01em;
+    }
+
+    .hero p {
+      margin: 10px 0 0;
+      color: var(--muted);
+      line-height: 1.75;
+      max-width: 840px;
+    }
+
+    .hero-badge {
+      border: 1px solid var(--line-strong);
+      background: rgba(255,255,255,.82);
+      color: var(--primary);
+      border-radius: 999px;
+      padding: 11px 16px;
+      font-weight: 700;
+      box-shadow: var(--shadow);
+      white-space: nowrap;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 22px;
+    }
+
+    .tab {
+      border: 1px solid var(--line-strong);
+      background: rgba(255,255,255,.72);
+      color: var(--muted);
+      padding: 12px 18px;
+      border-radius: 999px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: .2s ease;
+    }
+
+    .tab.active {
+      background: linear-gradient(180deg, #5d88ff, #4f7cff);
+      color: white;
+      border-color: transparent;
+      box-shadow: 0 12px 26px rgba(79,124,255,.25);
+    }
+
+    .page { display: none; }
+    .page.active { display: block; }
+
+    .tool-layout {
+      display: grid;
+      grid-template-columns: 1.08fr .92fr;
+      gap: 22px;
+    }
+
+    @media (max-width: 1080px) {
+      .tool-layout { grid-template-columns: 1fr; }
+    }
+
+    .stack { display: grid; gap: 18px; }
+
+    .card {
+      background: var(--card);
+      border: 1px solid rgba(191, 210, 255, .8);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 18px 22px;
+      border-bottom: 1px solid var(--line);
+      background: linear-gradient(180deg, rgba(248,251,255,.95), rgba(242,247,255,.95));
+    }
+
+    .card-header h2, .card-header h3 {
+      margin: 0;
+      font-size: 19px;
+    }
+
+    .card-body { padding: 22px; }
+
+    .panel-note {
+      padding: 14px 16px;
+      border-radius: 16px;
+      line-height: 1.7;
+      background: var(--soft-blue);
+      border: 1px solid var(--line);
+      color: #3f5378;
+    }
+
+    .section-chip-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+
+    .section-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: .02em;
+      border: 1px solid var(--line);
+      color: var(--primary);
+      background: #f7faff;
+    }
+
+    .subsection {
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 18px;
+      background: linear-gradient(180deg, #ffffff, #fbfdff);
+    }
+
+    .subsection + .subsection { margin-top: 16px; }
+
+    .subsection h3 {
+      margin: 0 0 6px;
+      font-size: 18px;
+    }
+
+    .sub-desc {
+      margin: 0 0 16px;
+      color: var(--muted);
+      line-height: 1.65;
+      font-size: 14px;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .form-grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    @media (max-width: 780px) {
+      .form-grid, .form-grid-3 { grid-template-columns: 1fr; }
+    }
+
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 13px;
+      font-weight: 800;
+      color: #344563;
+    }
+
+    .help {
+      display: block;
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      border: 1px solid var(--line-strong);
+      background: #fff;
+      color: var(--text);
+      padding: 12px 14px;
+      border-radius: 14px;
+      font: inherit;
+      outline: none;
+      transition: .18s ease;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--primary-2);
+      box-shadow: 0 0 0 4px rgba(122,162,255,.18);
+    }
+
+    .toggle-grid {
+      display: grid;
+      gap: 10px;
+    }
+
+    .toggle {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 14px;
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      background: #fcfdff;
+    }
+
+    .toggle input {
+      width: 18px;
+      height: 18px;
+      margin-top: 2px;
+    }
+
+    .toggle strong { display: block; margin-bottom: 4px; }
+    .toggle span span { color: var(--muted); font-size: 13px; line-height: 1.6; }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 18px;
+    }
+
+    button, .btn-link {
+      appearance: none;
+      border: 0;
+      font: inherit;
+      font-weight: 800;
+      border-radius: 14px;
+      padding: 12px 16px;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .btn-primary {
+      background: linear-gradient(180deg, #5f8aff, #4f7cff);
+      color: #fff;
+      box-shadow: 0 10px 22px rgba(79,124,255,.22);
+    }
+
+    .btn-secondary {
+      background: #fff;
+      color: var(--text);
+      border: 1px solid var(--line-strong);
+    }
+
+    .btn-soft {
+      background: var(--soft-green);
+      color: #13796f;
+      border: 1px solid #c6f2ea;
+    }
+
+    .badge {
+      border-radius: 999px;
+      padding: 9px 12px;
+      font-size: 12px;
+      font-weight: 800;
+      background: #f3f7ff;
+      border: 1px solid var(--line);
+      color: var(--primary);
+    }
+
+    .codebox {
+      background: #f8fbff;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 16px;
+      min-height: 170px;
+    }
+
+    pre {
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 13px;
+      line-height: 1.72;
+      color: #243554;
+    }
+
+    .warn {
+      display: none;
+      margin-top: 14px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: var(--warn-bg);
+      border: 1px solid var(--warn-line);
+      color: #7a5a18;
+      line-height: 1.6;
+      font-size: 14px;
+    }
+
+    .status {
+      min-height: 1.2em;
+      margin-top: 10px;
+      color: var(--accent);
+      font-weight: 700;
+      font-size: 13px;
+    }
+
+    .kv-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0,1fr));
+      gap: 14px;
+    }
+
+    @media (max-width: 860px) {
+      .kv-grid { grid-template-columns: 1fr; }
+    }
+
+    .mini-card {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 16px;
+      background: #fbfdff;
+    }
+
+    .mini-card h4 {
+      margin: 0 0 8px;
+      font-size: 16px;
+    }
+
+    .mini-card p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.7;
+      font-size: 14px;
+    }
+
+    .downloads {
+      display: grid;
+      gap: 12px;
+    }
+
+    .download-item {
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 16px;
+      background: #fbfdff;
+      flex-wrap: wrap;
+    }
+
+    .download-item strong { display: block; }
+    .download-item span {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .icon-toolbar {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+      align-items: center;
+    }
+
+    .icon-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+      gap: 10px;
+      max-height: 340px;
+      overflow: auto;
+      padding-right: 4px;
+    }
+
+    .icon-card {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: #fff;
+      padding: 12px 10px;
+      text-align: center;
+      cursor: pointer;
+      transition: .15s ease;
+    }
+
+    .icon-card:hover {
+      transform: translateY(-1px);
+      border-color: var(--primary-2);
+      box-shadow: 0 8px 18px rgba(95,138,255,.12);
+    }
+
+    .icon-card.active {
+      border-color: var(--primary);
+      background: #eef4ff;
+      box-shadow: 0 8px 18px rgba(95,138,255,.14);
+    }
+
+    .icon-preview {
+      width: 34px;
+      height: 34px;
+      margin: 0 auto 8px;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      background: #edf4ff;
+      color: #2d4f9f;
+      font-size: 12px;
+      font-weight: 900;
+      overflow: hidden;
+    }
+
+    .icon-label {
+      font-size: 12px;
+      line-height: 1.35;
+      color: #39506f;
+      word-break: break-word;
+    }
+
+    .inline-row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .footer-note {
+      margin-top: 16px;
+      color: var(--muted);
+      line-height: 1.7;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hero">
+      <div>
+        <h1>GTFS → CZML / GeoJSON 補助ツール</h1>
+        <p>
+          GitHub Pages で公開する前提の、明るめUIのモックアップです。ツール側を主画面にしつつ、チュートリアルとPython配布を別タブに分けています。
+          CZML出力系とGeoJSON出力系もレイアウトを分離し、GeoJSON側ではアイコン集から marker-symbol を選べる構成にしています。
+        </p>
+      </div>
+      <div class="hero-badge">静的サイト / ローカル実行補助 / GitHub Pages向け</div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" data-tab="tool">ツール</button>
+      <button class="tab" data-tab="setup">環境設定・チュートリアル</button>
+      <button class="tab" data-tab="downloads">Pythonダウンロード</button>
+    </div>
+
+    <section id="tool" class="page active">
+      <div class="tool-layout">
+        <div class="stack">
+          <div class="card">
+            <div class="card-header">
+              <h2>CZML 出力ツール</h2>
+              <div class="inline-row">
+                <span class="badge">3Dモデル走行</span>
+                <button class="btn-secondary" id="loadSampleCzmlBtn">CZMLサンプル</button>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="panel-note">
+                GTFS-JP から CZML を生成するための入力群です。現在の Python は <strong>--gtfs-dir</strong> を前提にしているため、ZIPのまま直接渡すのではなく、
+                このUIでは <strong>ZIPを指定した場合に展開コマンドも一緒に生成する</strong> 形にしています。
+              </div>
+
+              <div class="subsection" style="margin-top:16px;">
+                <h3>基本設定</h3>
+                <p class="sub-desc">GTFS入力、日付、出力ファイル、シェル形式などを指定します。</p>
+                <div class="form-grid">
+                  <div>
+                    <label for="shellType">表示するコマンド形式</label>
+                    <select id="shellType">
+                      <option value="mac">Mac / Linux</option>
+                      <option value="win">Windows PowerShell</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label for="pythonCmd">Pythonコマンド</label>
+                    <input id="pythonCmd" value="python3" />
+                    <span class="help">Windowsなら <code>python</code> や <code>py</code> に変更できます。</span>
+                  </div>
+                  <div>
+                    <label for="gtfsInputMode">GTFS入力形式</label>
+                    <select id="gtfsInputMode">
+                      <option value="zip" selected>ZIPファイルを使う</option>
+                      <option value="dir">展開済みフォルダを使う</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label for="gtfsPath">GTFS ZIP / フォルダパス</label>
+                    <input id="gtfsPath" placeholder="./GTFS_JP_FEED.zip" />
+                  </div>
+                  <div>
+                    <label for="extractDir">展開先フォルダ名</label>
+                    <input id="extractDir" placeholder="./GTFS_JP_FEED" />
+                    <span class="help">ZIPモード時に展開先として使います。</span>
+                  </div>
+                  <div>
+                    <label for="serviceDate">サービス日</label>
+                    <input id="serviceDate" type="date" />
+                  </div>
+                  <div>
+                    <label for="czmlOutput">CZML出力ファイル</label>
+                    <input id="czmlOutput" placeholder="bus_animation.czml" />
+                  </div>
+                  <div>
+                    <label for="modelUrl">3DモデルURL</label>
+                    <input id="modelUrl" placeholder="https://example.com/models/bus.glb" />
+                  </div>
+                </div>
+              </div>
+
+              <div class="subsection">
+                <h3>アニメーション・描画オプション</h3>
+                <p class="sub-desc">shape がない便の扱い、モデル描画、補間などを指定します。</p>
+                <div class="form-grid-3">
+                  <div>
+                    <label for="fallbackMode">fallback-mode</label>
+                    <select id="fallbackMode">
+                      <option value="none">none</option>
+                      <option value="stops">stops</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label for="modelScale">model-scale</label>
+                    <input id="modelScale" type="number" step="0.1" value="1.0" />
+                  </div>
+                  <div>
+                    <label for="sampleEvery">sample-every</label>
+                    <input id="sampleEvery" type="number" step="1" value="10" />
+                  </div>
+                  <div>
+                    <label for="trail">trail</label>
+                    <input id="trail" type="number" step="1" value="60" />
+                  </div>
+                  <div>
+                    <label for="lineOpacity">line-opacity</label>
+                    <input id="lineOpacity" type="number" step="0.1" value="1.0" />
+                  </div>
+                  <div>
+                    <label for="heightRef">model-height-reference</label>
+                    <select id="heightRef">
+                      <option value="RELATIVE_TO_GROUND" selected>RELATIVE_TO_GROUND</option>
+                      <option value="NONE">NONE</option>
+                      <option value="CLAMP_TO_GROUND">CLAMP_TO_GROUND</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="toggle-grid" style="margin-top:14px;">
+                  <label class="toggle"><input type="checkbox" id="withPoint" checked /><span><strong>with-point を有効</strong><br><span>モデルと一緒に point も出力します。</span></span></label>
+                  <label class="toggle"><input type="checkbox" id="clampToGround" checked /><span><strong>clamp-to-ground を有効</strong><br><span>ルート線を地表に張り付ける設定です。</span></span></label>
+                  <label class="toggle"><input type="checkbox" id="debugMode" /><span><strong>debug を有効</strong><br><span>デバッグ出力を追加します。</span></span></label>
+                  <label class="toggle"><input type="checkbox" id="noOrientation" /><span><strong>no-orientation を有効</strong><br><span>モデルの向きを固定したい場合に使います。</span></span></label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <h2>GeoJSON 出力ツール</h2>
+              <div class="inline-row">
+                <span class="badge">停留所 / marker属性</span>
+                <button class="btn-secondary" id="loadSampleGeoBtn">GeoJSONサンプル</button>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="panel-note">
+                stops.txt から GeoJSON を出力するコマンドと、必要なら marker 属性付与コマンドを別系統で生成します。
+                marker-symbol はアイコン集から選べるようにしています。
+              </div>
+
+              <div class="subsection" style="margin-top:16px;">
+                <h3>停留所 GeoJSON 出力</h3>
+                <p class="sub-desc">GTFSから停留所ポイントをGeoJSON化します。route_id 絞り込みも可能です。</p>
+                <div class="form-grid">
+                  <div>
+                    <label for="geojsonOutput">GeoJSON出力ファイル</label>
+                    <input id="geojsonOutput" placeholder="stops.geojson" />
+                  </div>
+                  <div>
+                    <label for="routeIds">route_id（複数はカンマ区切り）</label>
+                    <input id="routeIds" placeholder="1,3,airport-line" />
+                  </div>
+                  <div>
+                    <label for="markerColor">marker-color</label>
+                    <input id="markerColor" value="#3a8fff" />
+                  </div>
+                  <div>
+                    <label for="markerSize">marker-size</label>
+                    <select id="markerSize">
+                      <option value="small">small</option>
+                      <option value="medium" selected>medium</option>
+                      <option value="large">large</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div class="subsection">
+                <h3>marker アイコン選択</h3>
+                <p class="sub-desc">simplestyles のアイコン集 GeoJSON を読み込み、marker-symbol 候補として選べるようにしています。</p>
+                <div class="icon-toolbar">
+                  <input id="iconSearch" placeholder="アイコン名で絞り込み（例: bus, cafe, park）" style="max-width:340px;" />
+                  <button class="btn-secondary" id="resetIconBtn">アイコン選択をリセット</button>
+                  <span class="badge" id="selectedIconBadge">選択中: なし</span>
+                </div>
+                <div class="icon-grid" id="iconGrid"></div>
+                <div class="footer-note">選択したアイコン名は <code>--marker-symbol</code> としてコマンドに反映します。</div>
+              </div>
+
+              <div class="subsection">
+                <h3>追加の marker 属性付与</h3>
+                <p class="sub-desc">GeoJSONに対して後から marker 属性を付与したい場合の補助コマンドです。</p>
+                <div class="toggle-grid">
+                  <label class="toggle"><input type="checkbox" id="emitMarkerCommand" /><span><strong>geojson_apply_markers.py のコマンドも生成する</strong><br><span>GeoJSON出力後に追加で marker を付け直したい場合に使います。</span></span></label>
+                </div>
+                <div class="form-grid" style="margin-top:14px;">
+                  <div>
+                    <label for="markerInput">marker付与の入力GeoJSON</label>
+                    <input id="markerInput" placeholder="stops.geojson" />
+                  </div>
+                  <div>
+                    <label for="markerOutput">marker付与後の出力GeoJSON</label>
+                    <input id="markerOutput" placeholder="stops_marked.geojson" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="stack">
+          <div class="card">
+            <div class="card-header">
+              <h2>生成コマンド</h2>
+              <span class="badge" id="cmdModeBadge">Mac / Linux</span>
+            </div>
+            <div class="card-body">
+              <div class="section-chip-row">
+                <span class="section-chip">CZML コマンド</span>
+                <span class="section-chip">GeoJSON コマンド</span>
+                <span class="section-chip">ZIP展開コマンド対応</span>
+              </div>
+
+              <div class="subsection">
+                <h3>CZML 用コマンド</h3>
+                <div class="codebox"><pre id="czmlCommandPreview"></pre></div>
+              </div>
+
+              <div class="subsection">
+                <h3>GeoJSON 用コマンド</h3>
+                <div class="codebox"><pre id="geoCommandPreview"></pre></div>
+              </div>
+
+              <div class="actions">
+                <button class="btn-primary" id="copyAllBtn">両方まとめてコピー</button>
+                <button class="btn-secondary" id="downloadCommandBtn">.txt で保存</button>
+                <button class="btn-soft" id="downloadConfigBtn">config.json を保存</button>
+              </div>
+
+              <div class="warn" id="warnBox"></div>
+              <div class="status" id="statusText"></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <h3>設計メモ</h3>
+            </div>
+            <div class="card-body">
+              <div class="mini-card">
+                <h4>1. 明るめデザイン</h4>
+                <p>全体を白・淡い青基調に変更し、ツール感が強いUIに寄せています。</p>
+              </div>
+              <div class="mini-card" style="margin-top:12px;">
+                <h4>2. CZML と GeoJSON を分離</h4>
+                <p>ひとつの巨大フォームではなく、用途別にカードを完全分離しています。</p>
+              </div>
+              <div class="mini-card" style="margin-top:12px;">
+                <h4>3. アイコン選択</h4>
+                <p>simplestyles のアイコン名を一覧化し、marker-symbol 候補を見ながら選べる想定です。</p>
+              </div>
+              <div class="mini-card" style="margin-top:12px;">
+                <h4>4. ZIP 入力</h4>
+                <p>現行Pythonは展開済みディレクトリ前提なので、ページ側で unzip / Expand-Archive を先に生成する設計にしています。</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="setup" class="page">
+      <div class="card">
+        <div class="card-header">
+          <h2>環境設定・チュートリアル</h2>
+        </div>
+        <div class="card-body">
+          <div class="kv-grid">
+            <div class="mini-card">
+              <h4>基本の流れ</h4>
+              <p>
+                1. Python をインストール<br>
+                2. このページから Python スクリプトをダウンロード<br>
+                3. GTFS-JP を ZIP のまま置くか、手動で展開<br>
+                4. ツールタブでオプションを選択<br>
+                5. 生成されたコマンドをローカル端末で実行
+              </p>
+            </div>
+            <div class="mini-card">
+              <h4>ZIP入力について</h4>
+              <p>
+                現行スクリプトは <code>--gtfs-dir</code> 前提です。そのため、ZIPモードではこのページが先に展開コマンドを出し、その後に Python コマンドを続ける想定です。
+                将来的には Python 側を改修して ZIP を直接読めるようにもできます。
+              </p>
+            </div>
+          </div>
+
+          <div class="subsection" style="margin-top:18px;">
+            <h3>Mac / Linux の例</h3>
+            <div class="codebox"><pre>unzip -o "./GTFS_JP_FEED.zip" -d "./GTFS_JP_FEED"
+python3 gtfsjp_to_czml.py \
+  --gtfs-dir "./GTFS_JP_FEED" \
+  --service-date "2026-03-12" \
+  --output "bus_animation.czml" \
+  --model-url "https://example.com/models/bus.glb"</pre></div>
+          </div>
+
+          <div class="subsection">
+            <h3>Windows PowerShell の例</h3>
+            <div class="codebox"><pre>Expand-Archive -Path "./GTFS_JP_FEED.zip" -DestinationPath "./GTFS_JP_FEED" -Force
+python gtfsjp_to_czml.py `
+  --gtfs-dir "./GTFS_JP_FEED" `
+  --service-date "2026-03-12" `
+  --output "bus_animation.czml" `
+  --model-url "https://example.com/models/bus.glb"</pre></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="downloads" class="page">
+      <div class="card">
+        <div class="card-header">
+          <h2>Pythonダウンロード</h2>
+        </div>
+        <div class="card-body">
+          <div class="panel-note">
+            実運用では GitHub リポジトリの raw URL または Release assets に接続します。ここでは UI モックのため、リンク先はプレースホルダです。
+          </div>
+          <div class="downloads" style="margin-top:16px;">
+            <div class="download-item">
+              <div>
+                <strong>gtfsjp_to_czml.py</strong>
+                <span>GTFS-JP から CZML を生成し、3D モデル走行や時刻表アニメーションに対応するメインスクリプト</span>
+              </div>
+              <a href="#" class="btn-link btn-secondary" download>ダウンロード</a>
+            </div>
+            <div class="download-item">
+              <div>
+                <strong>gtfs_stops_to_geojson.py</strong>
+                <span>stops.txt から停留所 GeoJSON を作成するスクリプト</span>
+              </div>
+              <a href="#" class="btn-link btn-secondary" download>ダウンロード</a>
+            </div>
+            <div class="download-item">
+              <div>
+                <strong>geojson_apply_markers.py</strong>
+                <span>GeoJSON に marker-color / marker-symbol / marker-size を付与するスクリプト</span>
+              </div>
+              <a href="#" class="btn-link btn-secondary" download>ダウンロード</a>
+            </div>
+            <div class="download-item">
+              <div>
+                <strong>howtouse.txt</strong>
+                <span>簡易な使い方メモ。チュートリアルタブと併用して案内する想定です。</span>
+              </div>
+              <a href="#" class="btn-link btn-secondary" download>ダウンロード</a>
+            </div>
+            <div class="download-item">
+              <div>
+                <strong>simplestylesのアイコン集.geojson</strong>
+                <span>marker-symbol 候補の参照用データ。ページ上でも読み込み対象にしています。</span>
+              </div>
+              <a href="#" class="btn-link btn-secondary" download>ダウンロード</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const tabs = document.querySelectorAll('.tab');
+    const pages = document.querySelectorAll('.page');
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        tabs.forEach(t => t.classList.remove('active'));
+        pages.forEach(p => p.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById(tab.dataset.tab).classList.add('active');
+      });
+    });
+
+    const el = {
+      shellType: document.getElementById('shellType'),
+      pythonCmd: document.getElementById('pythonCmd'),
+      gtfsInputMode: document.getElementById('gtfsInputMode'),
+      gtfsPath: document.getElementById('gtfsPath'),
+      extractDir: document.getElementById('extractDir'),
+      serviceDate: document.getElementById('serviceDate'),
+      czmlOutput: document.getElementById('czmlOutput'),
+      modelUrl: document.getElementById('modelUrl'),
+      fallbackMode: document.getElementById('fallbackMode'),
+      modelScale: document.getElementById('modelScale'),
+      sampleEvery: document.getElementById('sampleEvery'),
+      trail: document.getElementById('trail'),
+      lineOpacity: document.getElementById('lineOpacity'),
+      heightRef: document.getElementById('heightRef'),
+      withPoint: document.getElementById('withPoint'),
+      clampToGround: document.getElementById('clampToGround'),
+      debugMode: document.getElementById('debugMode'),
+      noOrientation: document.getElementById('noOrientation'),
+      geojsonOutput: document.getElementById('geojsonOutput'),
+      routeIds: document.getElementById('routeIds'),
+      markerColor: document.getElementById('markerColor'),
+      markerSize: document.getElementById('markerSize'),
+      markerInput: document.getElementById('markerInput'),
+      markerOutput: document.getElementById('markerOutput'),
+      emitMarkerCommand: document.getElementById('emitMarkerCommand'),
+      iconSearch: document.getElementById('iconSearch'),
+      iconGrid: document.getElementById('iconGrid'),
+      selectedIconBadge: document.getElementById('selectedIconBadge'),
+      czmlCommandPreview: document.getElementById('czmlCommandPreview'),
+      geoCommandPreview: document.getElementById('geoCommandPreview'),
+      cmdModeBadge: document.getElementById('cmdModeBadge'),
+      warnBox: document.getElementById('warnBox'),
+      statusText: document.getElementById('statusText')
+    };
+
+    let selectedMarkerSymbol = '';
+    let iconLibrary = [];
+
+    function q(v) {
+      if (v == null || v === '') return '""';
+      return '"' + String(v).replaceAll('"', '\\"') + '"';
+    }
+
+    function joinCmd(parts, shell) {
+      const sep = shell === 'win' ? ' `\n  ' : ' \\\n  ';
+      return parts.join(sep);
+    }
+
+    function normalizeGtfsDir() {
+      if (el.gtfsInputMode.value === 'dir') {
+        return el.gtfsPath.value || './GTFS_JP_FEED';
+      }
+      return el.extractDir.value || './GTFS_JP_FEED';
+    }
+
+    function buildExtractCommand() {
+      if (el.gtfsInputMode.value !== 'zip') return '';
+      const src = el.gtfsPath.value || './GTFS_JP_FEED.zip';
+      const dst = el.extractDir.value || './GTFS_JP_FEED';
+      if (el.shellType.value === 'win') {
+        return `Expand-Archive -Path ${q(src)} -DestinationPath ${q(dst)} -Force`;
+      }
+      return `unzip -o ${q(src)} -d ${q(dst)}`;
+    }
+
+    function buildCzmlCommand() {
+      const parts = [el.pythonCmd.value || 'python3', 'gtfsjp_to_czml.py'];
+      parts.push('--gtfs-dir ' + q(normalizeGtfsDir()));
+      if (el.serviceDate.value) parts.push('--service-date ' + q(el.serviceDate.value));
+      if (el.czmlOutput.value) parts.push('--output ' + q(el.czmlOutput.value));
+      if (el.modelUrl.value) parts.push('--model-url ' + q(el.modelUrl.value));
+      if (el.fallbackMode.value) parts.push('--fallback-mode ' + el.fallbackMode.value);
+      if (el.sampleEvery.value) parts.push('--sample-every ' + el.sampleEvery.value);
+      if (el.lineOpacity.value) parts.push('--line-opacity ' + el.lineOpacity.value);
+      if (el.heightRef.value) parts.push('--model-height-reference ' + el.heightRef.value);
+      if (el.modelScale.value) parts.push('--model-scale ' + el.modelScale.value);
+      if (el.withPoint.checked) parts.push('--with-point');
+      if (el.trail.value) parts.push('--trail ' + el.trail.value);
+      if (el.clampToGround.checked) parts.push('--clamp-to-ground');
+      if (el.debugMode.checked) parts.push('--debug');
+      if (el.noOrientation.checked) parts.push('--no-orientation');
+
+      const cmd = joinCmd(parts, el.shellType.value);
+      const extract = buildExtractCommand();
+      return extract ? `${extract}\n${cmd}` : cmd;
+    }
+
+    function buildGeojsonCommand() {
+      const cmdBlocks = [];
+      const parts = [el.pythonCmd.value || 'python3', 'gtfs_stops_to_geojson.py'];
+      parts.push('--gtfs-dir ' + q(normalizeGtfsDir()));
+      if (el.geojsonOutput.value) parts.push('--output ' + q(el.geojsonOutput.value));
+      if (el.markerColor.value) parts.push('--marker-color ' + q(el.markerColor.value));
+      if (selectedMarkerSymbol) parts.push('--marker-symbol ' + selectedMarkerSymbol);
+      if (el.markerSize.value) parts.push('--marker-size ' + el.markerSize.value);
+
+      const routes = (el.routeIds.value || '').split(',').map(v => v.trim()).filter(Boolean);
+      routes.forEach(routeId => parts.push('--route-id ' + q(routeId)));
+
+      cmdBlocks.push(joinCmd(parts, el.shellType.value));
+
+      if (el.emitMarkerCommand.checked) {
+        const markerParts = [el.pythonCmd.value || 'python3', 'geojson_apply_markers.py'];
+        markerParts.push(q(el.markerInput.value || el.geojsonOutput.value || 'stops.geojson'));
+        markerParts.push(q(el.markerOutput.value || 'stops_marked.geojson'));
+        if (selectedMarkerSymbol) markerParts.push('--symbol ' + selectedMarkerSymbol);
+        if (el.markerColor.value) markerParts.push('--color ' + q(el.markerColor.value));
+        if (el.markerSize.value) markerParts.push('--size ' + el.markerSize.value);
+        cmdBlocks.push(joinCmd(markerParts, el.shellType.value));
+      }
+
+      const extract = buildExtractCommand();
+      if (extract) cmdBlocks.unshift(extract);
+      return cmdBlocks.join('\n\n');
+    }
+
+    function validate() {
+      const warnings = [];
+      if (!el.gtfsPath.value) warnings.push('GTFS ZIP / フォルダパスが未入力です。');
+      if (!el.czmlOutput.value) warnings.push('CZML出力ファイルが未入力です。');
+      if (!el.geojsonOutput.value) warnings.push('GeoJSON出力ファイルが未入力です。');
+      if (!el.modelUrl.value) warnings.push('3DモデルURLが未入力です。');
+      if (el.gtfsInputMode.value === 'zip' && !el.extractDir.value) warnings.push('ZIP展開先フォルダ名が未入力です。');
+      return warnings;
+    }
+
+    function render() {
+      el.cmdModeBadge.textContent = el.shellType.value === 'win' ? 'Windows PowerShell' : 'Mac / Linux';
+      el.czmlCommandPreview.textContent = buildCzmlCommand();
+      el.geoCommandPreview.textContent = buildGeojsonCommand();
+
+      const warnings = validate();
+      if (warnings.length) {
+        el.warnBox.style.display = 'block';
+        el.warnBox.textContent = warnings.join(' / ');
+      } else {
+        el.warnBox.style.display = 'none';
+        el.warnBox.textContent = '';
+      }
+    }
+
+    function renderIconGrid() {
+      const keyword = (el.iconSearch.value || '').trim().toLowerCase();
+      const list = iconLibrary.filter(item => !keyword || item.label.toLowerCase().includes(keyword));
+      el.iconGrid.innerHTML = '';
+
+      list.forEach(item => {
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.className = 'icon-card' + (selectedMarkerSymbol === item.symbol ? ' active' : '');
+        card.innerHTML = `
+          <div class="icon-preview">${item.symbol.slice(0, 2)}</div>
+          <div class="icon-label">${item.label}</div>
+        `;
+        card.addEventListener('click', () => {
+          selectedMarkerSymbol = item.symbol;
+          el.selectedIconBadge.textContent = '選択中: ' + item.symbol;
+          renderIconGrid();
+          render();
+        });
+        el.iconGrid.appendChild(card);
+      });
+    }
+
+    async function loadIcons() {
+      try {
+        const res = await fetch('simplestylesのアイコン集.geojson');
+        if (!res.ok) throw new Error('icon file not found');
+        const data = await res.json();
+        iconLibrary = (data.features || [])
+          .map(f => {
+            const p = f.properties || {};
+            const symbol = p['marker-symbol'] || '';
+            const title = p.title || symbol || 'unnamed';
+            return symbol ? { symbol, label: title } : null;
+          })
+          .filter(Boolean)
+          .sort((a, b) => a.label.localeCompare(b.label, 'ja'));
+
+        if (!selectedMarkerSymbol && iconLibrary.length) {
+          const bus = iconLibrary.find(v => v.symbol === 'bus');
+          selectedMarkerSymbol = bus ? bus.symbol : iconLibrary[0].symbol;
+          el.selectedIconBadge.textContent = '選択中: ' + selectedMarkerSymbol;
+        }
+        renderIconGrid();
+        render();
+      } catch (err) {
+        iconLibrary = [
+          { symbol: 'bus', label: 'bus' },
+          { symbol: 'marker', label: 'marker' },
+          { symbol: 'cafe', label: 'cafe' },
+          { symbol: 'park', label: 'park' }
+        ];
+        selectedMarkerSymbol = 'bus';
+        el.selectedIconBadge.textContent = '選択中: bus';
+        renderIconGrid();
+        el.statusText.textContent = 'アイコン集の読み込みに失敗したため、簡易候補で表示しています。';
+        render();
+      }
+    }
+
+    document.querySelectorAll('input, select, textarea').forEach(node => {
+      node.addEventListener('input', render);
+      node.addEventListener('change', render);
+    });
+
+    el.iconSearch.addEventListener('input', renderIconGrid);
+
+    document.getElementById('resetIconBtn').addEventListener('click', () => {
+      selectedMarkerSymbol = '';
+      el.selectedIconBadge.textContent = '選択中: なし';
+      renderIconGrid();
+      render();
+    });
+
+    document.getElementById('loadSampleCzmlBtn').addEventListener('click', () => {
+      el.shellType.value = 'mac';
+      el.pythonCmd.value = 'python3';
+      el.gtfsInputMode.value = 'zip';
+      el.gtfsPath.value = './GTFS_JP_FEED.zip';
+      el.extractDir.value = './GTFS_JP_FEED';
+      el.serviceDate.value = '2026-03-12';
+      el.czmlOutput.value = 'bus_animation.czml';
+      el.modelUrl.value = 'https://example.com/models/bus.glb';
+      el.fallbackMode.value = 'none';
+      el.modelScale.value = '1.0';
+      el.sampleEvery.value = '10';
+      el.trail.value = '60';
+      el.lineOpacity.value = '1.0';
+      el.heightRef.value = 'RELATIVE_TO_GROUND';
+      el.withPoint.checked = true;
+      el.clampToGround.checked = true;
+      el.debugMode.checked = false;
+      el.noOrientation.checked = false;
+      render();
+      el.statusText.textContent = 'CZMLサンプル値を読み込みました。';
+    });
+
+    document.getElementById('loadSampleGeoBtn').addEventListener('click', () => {
+      el.geojsonOutput.value = 'stops.geojson';
+      el.routeIds.value = '1,3';
+      el.markerColor.value = '#3a8fff';
+      el.markerSize.value = 'medium';
+      el.markerInput.value = 'stops.geojson';
+      el.markerOutput.value = 'stops_marked.geojson';
+      el.emitMarkerCommand.checked = true;
+      if (iconLibrary.length) {
+        const bus = iconLibrary.find(v => v.symbol === 'bus');
+        selectedMarkerSymbol = bus ? bus.symbol : iconLibrary[0].symbol;
+        el.selectedIconBadge.textContent = '選択中: ' + selectedMarkerSymbol;
+      }
+      renderIconGrid();
+      render();
+      el.statusText.textContent = 'GeoJSONサンプル値を読み込みました。';
+    });
+
+    function downloadText(filename, text) {
+      const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    document.getElementById('copyAllBtn').addEventListener('click', async () => {
+      const text = [
+        '### CZML 用コマンド',
+        buildCzmlCommand(),
+        '',
+        '### GeoJSON 用コマンド',
+        buildGeojsonCommand()
+      ].join('\n');
+      try {
+        await navigator.clipboard.writeText(text);
+        el.statusText.textContent = 'CZML と GeoJSON のコマンドをまとめてコピーしました。';
+      } catch {
+        el.statusText.textContent = 'コピーに失敗しました。プレビューから手動でコピーしてください。';
+      }
+    });
+
+    document.getElementById('downloadCommandBtn').addEventListener('click', () => {
+      const text = [
+        '### CZML 用コマンド',
+        buildCzmlCommand(),
+        '',
+        '### GeoJSON 用コマンド',
+        buildGeojsonCommand()
+      ].join('\n');
+      downloadText('generated_commands.txt', text);
+      el.statusText.textContent = 'generated_commands.txt を保存しました。';
+    });
+
+    document.getElementById('downloadConfigBtn').addEventListener('click', () => {
+      const config = {
+        shell: el.shellType.value,
+        python_command: el.pythonCmd.value,
+        gtfs_input_mode: el.gtfsInputMode.value,
+        gtfs_path: el.gtfsPath.value,
+        extract_dir: el.extractDir.value,
+        service_date: el.serviceDate.value,
+        czml: {
+          output: el.czmlOutput.value,
+          model_url: el.modelUrl.value,
+          fallback_mode: el.fallbackMode.value,
+          model_scale: Number(el.modelScale.value || 1),
+          sample_every: Number(el.sampleEvery.value || 10),
+          trail: Number(el.trail.value || 60),
+          line_opacity: Number(el.lineOpacity.value || 1),
+          model_height_reference: el.heightRef.value,
+          with_point: el.withPoint.checked,
+          clamp_to_ground: el.clampToGround.checked,
+          debug: el.debugMode.checked,
+          no_orientation: el.noOrientation.checked
+        },
+        geojson: {
+          output: el.geojsonOutput.value,
+          route_ids: (el.routeIds.value || '').split(',').map(v => v.trim()).filter(Boolean),
+          marker_color: el.markerColor.value,
+          marker_symbol: selectedMarkerSymbol,
+          marker_size: el.markerSize.value,
+          emit_marker_command: el.emitMarkerCommand.checked,
+          marker_input: el.markerInput.value,
+          marker_output: el.markerOutput.value
+        }
+      };
+      downloadText('config.json', JSON.stringify(config, null, 2));
+      el.statusText.textContent = 'config.json を保存しました。';
+    });
+
+    loadIcons();
+    render();
+  </script>
+</body>
+</html>
