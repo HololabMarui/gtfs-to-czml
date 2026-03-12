@@ -1,0 +1,2 @@
+# gtfs-to-czml
+GTFS.jpデータからgeojsonやCZMLにアニメーション変換させるツール
