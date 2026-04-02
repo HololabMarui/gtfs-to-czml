@@ -1,197 +1,28 @@
-<!doctype html>
-<html lang="ja">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>GTFS-JP Zip確認結果</title>
-  <style>
-    body {
-      font-family: system-ui, sans-serif;
-      margin: 2rem;
-      line-height: 1.6;
-      background: #f8fafc;
-      color: #0f172a;
-    }
-    .wrap {
-      max-width: 920px;
-      margin: 0 auto;
-    }
-    .card {
-      background: #fff;
-      border: 1px solid #dbe2ea;
-      border-radius: 12px;
-      padding: 1.25rem;
-      margin-bottom: 1rem;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-    }
-    h1, h2 {
-      margin-top: 0;
-    }
-    .ok {
-      color: #166534;
-      font-weight: 700;
-    }
-    .ng {
-      color: #b91c1c;
-      font-weight: 700;
-    }
-    ul {
-      padding-left: 1.2rem;
-    }
-    code {
-      background: #f1f5f9;
-      padding: 0.1rem 0.35rem;
-      border-radius: 6px;
-    }
-    pre {
-      background: #0f172a;
-      color: #e2e8f0;
-      padding: 1rem;
-      border-radius: 10px;
-      overflow-x: auto;
-      white-space: pre-wrap;
-      word-break: break-word;
-    }
-    a.button {
-      display: inline-block;
-      margin-top: 0.5rem;
-      text-decoration: none;
-      background: #2563eb;
-      color: white;
-      padding: 0.7rem 1rem;
-      border-radius: 10px;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-    }
-    th, td {
-      text-align: left;
-      padding: 0.5rem;
-      border-bottom: 1px solid #e2e8f0;
-      vertical-align: top;
-    }
-  </style>
-</head>
-<body>
-  <div class="wrap">
-    <div class="card">
-      <h1>GTFS-JP Zip確認結果</h1>
+{% if routes_run %}
+<div class="card">
+  <h2>routes.geojson 実行結果</h2>
 
-      {% if error %}
-        <p class="ng">{{ error }}</p>
-      {% else %}
-        <p><strong>Zipファイル名:</strong> {{ zip_name }}</p>
-        <p><strong>保存先:</strong> <code>{{ save_path }}</code></p>
-        <p><strong>展開先:</strong> <code>{{ extract_path }}</code></p>
-
-        {% if all_ok %}
-          <p class="ok">必須GTFSファイルはすべて揃っています。</p>
-        {% else %}
-          <p class="ng">必須GTFSファイルが不足しています。</p>
-        {% endif %}
-      {% endif %}
-    </div>
-
-    {% if not error %}
-    <div class="card">
-      <h2>入力内容</h2>
-      <table>
-        <tr><th>service-date</th><td>{{ form_data.service_date }}</td></tr>
-        <tr><th>tz</th><td>{{ form_data.tz }}</td></tr>
-        <tr><th>route_id</th><td>{{ form_data.route_ids_raw or "未指定" }}</td></tr>
-        <tr><th>model-url</th><td>{{ form_data.model_url or "未指定" }}</td></tr>
-        <tr><th>fallback-mode</th><td>{{ form_data.fallback_mode }}</td></tr>
-        <tr><th>sample-every</th><td>{{ form_data.sample_every }}</td></tr>
-        <tr><th>trail</th><td>{{ form_data.trail }}</td></tr>
-        <tr><th>marker-color</th><td>{{ form_data.marker_color }}</td></tr>
-        <tr><th>marker-symbol</th><td>{{ form_data.marker_symbol }}</td></tr>
-        <tr><th>marker-size</th><td>{{ form_data.marker_size }}</td></tr>
-        <tr><th>with-point</th><td>{{ "ON" if form_data.with_point else "OFF" }}</td></tr>
-        <tr><th>clamp-to-ground</th><td>{{ "ON" if form_data.clamp_to_ground else "OFF" }}</td></tr>
-        <tr><th>debug</th><td>{{ "ON" if form_data.debug else "OFF" }}</td></tr>
-      </table>
-    </div>
-
-    <div class="card">
-      <h2>必須ファイル確認</h2>
-      <ul>
-        {% for item in required_results %}
-          <li>
-            <code>{{ item.name }}</code>
-            {% if item.exists %}
-              <span class="ok">OK</span>
-            {% else %}
-              <span class="ng">不足</span>
-            {% endif %}
-          </li>
-        {% endfor %}
-      </ul>
-    </div>
-
-    <div class="card">
-      <h2>見つかった .txt ファイル</h2>
-      {% if found_files %}
-        <ul>
-          {% for name in found_files %}
-            <li><code>{{ name }}</code></li>
-          {% endfor %}
-        </ul>
-      {% else %}
-        <p class="ng">.txt ファイルが見つかりませんでした。</p>
-      {% endif %}
-    </div>
+  <p>
+    {% if routes_run.ok %}
+      <span class="ok">{{ routes_run.message }}</span>
+    {% else %}
+      <span class="ng">{{ routes_run.message }}</span>
     {% endif %}
+  </p>
 
-    {% if commands %}
-    <div class="card">
-      <h2>実行コマンド</h2>
-
-      <p><strong>stops.geojson 生成コマンド</strong></p>
-      <pre>{{ commands.stops_command }}</pre>
-
-      <p><strong>animation.czml 生成コマンド（まだ未実行）</strong></p>
-      <pre>{{ commands.czml_command }}</pre>
-
-      <p><strong>routes.geojson</strong></p>
-      <p>{{ commands.routes_note }}</p>
-    </div>
+  <p>
+    <strong>出力ファイル:</strong>
+    <code>{{ routes_run.output_path }}</code><br>
+    {% if routes_run.output_exists %}
+      <span class="ok">routes.geojson を生成できました。</span>
+    {% else %}
+      <span class="ng">routes.geojson が見つかりません。</span>
     {% endif %}
+  </p>
 
-    {% if stops_run %}
-    <div class="card">
-      <h2>stops.geojson 実行結果</h2>
-
-      <p>
-        <strong>return code:</strong>
-        {% if stops_run.returncode == 0 %}
-          <span class="ok">{{ stops_run.returncode }}</span>
-        {% else %}
-          <span class="ng">{{ stops_run.returncode }}</span>
-        {% endif %}
-      </p>
-
-      <p>
-        <strong>出力ファイル:</strong>
-        <code>{{ stops_run.output_path }}</code><br>
-        {% if stops_run.output_exists %}
-          <span class="ok">stops.geojson を生成できました。</span>
-        {% else %}
-          <span class="ng">stops.geojson が見つかりません。</span>
-        {% endif %}
-      </p>
-
-      <p><strong>stdout</strong></p>
-      <pre>{{ stops_run.stdout or "(出力なし)" }}</pre>
-
-      <p><strong>stderr</strong></p>
-      <pre>{{ stops_run.stderr or "(出力なし)" }}</pre>
-    </div>
-    {% endif %}
-
-    <div class="card">
-      <a class="button" href="/">戻る</a>
-    </div>
-  </div>
-</body>
-</html>
+  <p>
+    <strong>feature数:</strong>
+    {{ routes_run.feature_count }}
+  </p>
+</div>
+{% endif %}
