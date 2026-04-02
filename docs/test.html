@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>GTFS-JP Zip確認結果</title>
+  <title>GTFS-JP Zip確認</title>
   <style>
     body {
       font-family: system-ui, sans-serif;
@@ -13,154 +13,203 @@
       color: #0f172a;
     }
     .wrap {
-      max-width: 920px;
+      max-width: 860px;
       margin: 0 auto;
     }
     .card {
-      background: #fff;
+      background: #ffffff;
       border: 1px solid #dbe2ea;
       border-radius: 12px;
       padding: 1.25rem;
-      margin-bottom: 1rem;
       box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+      margin-bottom: 1rem;
     }
-    h1, h2 {
+    h1 {
       margin-top: 0;
+      font-size: 1.6rem;
     }
-    .ok {
-      color: #166534;
-      font-weight: 700;
+    p {
+      color: #475569;
     }
-    .ng {
-      color: #b91c1c;
-      font-weight: 700;
+    label {
+      display: block;
+      margin-top: 1rem;
+      margin-bottom: 0.4rem;
+      font-weight: 600;
     }
-    ul {
-      padding-left: 1.2rem;
+    input[type="file"],
+    input[type="date"],
+    input[type="text"],
+    input[type="number"],
+    select {
+      display: block;
+      width: 100%;
+      padding: 0.6rem;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      background: #fff;
+      box-sizing: border-box;
     }
-    code {
-      background: #f1f5f9;
-      padding: 0.1rem 0.35rem;
-      border-radius: 6px;
+    .filename {
+      margin-top: 0.6rem;
+      font-size: 0.95rem;
+      color: #334155;
     }
-    pre {
-      background: #0f172a;
-      color: #e2e8f0;
-      padding: 1rem;
-      border-radius: 10px;
-      overflow-x: auto;
-      white-space: pre-wrap;
-      word-break: break-word;
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
     }
-    a.button {
-      display: inline-block;
-      margin-top: 0.5rem;
-      text-decoration: none;
+    .row3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 1rem;
+    }
+    button {
+      margin-top: 1.2rem;
       background: #2563eb;
       color: white;
-      padding: 0.7rem 1rem;
+      border: 0;
       border-radius: 10px;
+      padding: 0.75rem 1.1rem;
+      font-size: 1rem;
+      cursor: pointer;
     }
-    table {
-      width: 100%;
-      border-collapse: collapse;
+    button:hover {
+      background: #1d4ed8;
     }
-    th, td {
-      text-align: left;
-      padding: 0.5rem;
-      border-bottom: 1px solid #e2e8f0;
-      vertical-align: top;
+    .note {
+      margin-top: 1rem;
+      font-size: 0.95rem;
+      color: #64748b;
+    }
+    .checkbox-row {
+      display: flex;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+      margin-top: 1rem;
+    }
+    .checkbox-row label {
+      margin: 0;
+      font-weight: 500;
     }
   </style>
 </head>
 <body>
   <div class="wrap">
     <div class="card">
-      <h1>GTFS-JP Zip確認結果</h1>
+      <h1>GTFS-JP Zip確認</h1>
+      <p>
+        Step 2 では、GTFS-JP の Zip をアップロードして中身を確認し、
+        さらに入力条件から実行予定の Python コマンドを生成して表示します。
+      </p>
 
-      {% if error %}
-        <p class="ng">{{ error }}</p>
-      {% else %}
-        <p><strong>Zipファイル名:</strong> {{ zip_name }}</p>
-        <p><strong>保存先:</strong> <code>{{ save_path }}</code></p>
-        <p><strong>展開先:</strong> <code>{{ extract_path }}</code></p>
+      <form action="/inspect" method="post" enctype="multipart/form-data">
+        <label for="gtfs_zip">GTFS-JP Zipファイル</label>
+        <input
+          type="file"
+          id="gtfs_zip"
+          name="gtfs_zip"
+          accept=".zip"
+          required
+        >
+        <div class="filename" id="filename">未選択</div>
 
-        {% if all_ok %}
-          <p class="ok">必須GTFSファイルはすべて揃っています。</p>
-        {% else %}
-          <p class="ng">必須GTFSファイルが不足しています。</p>
-        {% endif %}
-      {% endif %}
-    </div>
+        <div class="row">
+          <div>
+            <label for="service_date">service-date</label>
+            <input type="date" id="service_date" name="service_date" required>
+          </div>
+          <div>
+            <label for="tz">タイムゾーン</label>
+            <input type="text" id="tz" name="tz" value="Asia/Tokyo">
+          </div>
+        </div>
 
-    {% if not error %}
-    <div class="card">
-      <h2>入力内容</h2>
-      <table>
-        <tr><th>service-date</th><td>{{ form_data.service_date }}</td></tr>
-        <tr><th>tz</th><td>{{ form_data.tz }}</td></tr>
-        <tr><th>route_id</th><td>{{ form_data.route_ids_raw or "未指定" }}</td></tr>
-        <tr><th>model-url</th><td>{{ form_data.model_url or "未指定" }}</td></tr>
-        <tr><th>fallback-mode</th><td>{{ form_data.fallback_mode }}</td></tr>
-        <tr><th>sample-every</th><td>{{ form_data.sample_every }}</td></tr>
-        <tr><th>trail</th><td>{{ form_data.trail }}</td></tr>
-        <tr><th>marker-color</th><td>{{ form_data.marker_color }}</td></tr>
-        <tr><th>marker-symbol</th><td>{{ form_data.marker_symbol }}</td></tr>
-        <tr><th>marker-size</th><td>{{ form_data.marker_size }}</td></tr>
-        <tr><th>with-point</th><td>{{ "ON" if form_data.with_point else "OFF" }}</td></tr>
-        <tr><th>clamp-to-ground</th><td>{{ "ON" if form_data.clamp_to_ground else "OFF" }}</td></tr>
-        <tr><th>debug</th><td>{{ "ON" if form_data.debug else "OFF" }}</td></tr>
-      </table>
-    </div>
+        <div class="row">
+          <div>
+            <label for="route_ids">route_id（任意、カンマ区切り）</label>
+            <input
+              type="text"
+              id="route_ids"
+              name="route_ids"
+              placeholder="例: 1,3,airport-line"
+            >
+          </div>
+          <div>
+            <label for="model_url">model-url（任意）</label>
+            <input
+              type="text"
+              id="model_url"
+              name="model_url"
+              placeholder="例: https://example.com/bus.glb"
+            >
+          </div>
+        </div>
 
-    <div class="card">
-      <h2>必須ファイル確認</h2>
-      <ul>
-        {% for item in required_results %}
-          <li>
-            <code>{{ item.name }}</code>
-            {% if item.exists %}
-              <span class="ok">OK</span>
-            {% else %}
-              <span class="ng">不足</span>
-            {% endif %}
-          </li>
-        {% endfor %}
-      </ul>
-    </div>
+        <div class="row3">
+          <div>
+            <label for="fallback_mode">fallback-mode</label>
+            <select id="fallback_mode" name="fallback_mode">
+              <option value="stops" selected>stops</option>
+              <option value="none">none</option>
+            </select>
+          </div>
+          <div>
+            <label for="sample_every">sample-every (m)</label>
+            <input type="number" id="sample_every" name="sample_every" value="50" min="1">
+          </div>
+          <div>
+            <label for="trail">trail (sec)</label>
+            <input type="number" id="trail" name="trail" value="60" min="0">
+          </div>
+        </div>
 
-    <div class="card">
-      <h2>見つかった .txt ファイル</h2>
-      {% if found_files %}
-        <ul>
-          {% for name in found_files %}
-            <li><code>{{ name }}</code></li>
-          {% endfor %}
-        </ul>
-      {% else %}
-        <p class="ng">.txt ファイルが見つかりませんでした。</p>
-      {% endif %}
-    </div>
-    {% endif %}
+        <div class="row3">
+          <div>
+            <label for="marker_color">marker-color</label>
+            <input type="text" id="marker_color" name="marker_color" value="#3a8fff">
+          </div>
+          <div>
+            <label for="marker_symbol">marker-symbol</label>
+            <input type="text" id="marker_symbol" name="marker_symbol" value="bus">
+          </div>
+          <div>
+            <label for="marker_size">marker-size</label>
+            <select id="marker_size" name="marker_size">
+              <option value="small">small</option>
+              <option value="medium" selected>medium</option>
+              <option value="large">large</option>
+            </select>
+          </div>
+        </div>
 
-    {% if commands %}
-    <div class="card">
-      <h2>実行予定コマンド</h2>
+        <div class="checkbox-row">
+          <label><input type="checkbox" name="with_point" checked> with-point</label>
+          <label><input type="checkbox" name="clamp_to_ground" checked> clamp-to-ground</label>
+          <label><input type="checkbox" name="debug"> debug</label>
+        </div>
 
-      <p><strong>stops.geojson 生成コマンド</strong></p>
-      <pre>{{ commands.stops_command }}</pre>
+        <button type="submit">Zip確認とコマンド生成</button>
+      </form>
 
-      <p><strong>animation.czml 生成コマンド</strong></p>
-      <pre>{{ commands.czml_command }}</pre>
-
-      <p><strong>routes.geojson</strong></p>
-      <p>{{ commands.routes_note }}</p>
-    </div>
-    {% endif %}
-
-    <div class="card">
-      <a class="button" href="/">戻る</a>
+      <div class="note">
+        この段階ではまだ変換を実行しません。入力値をもとに実行予定コマンドを表示します。
+      </div>
     </div>
   </div>
+
+  <script>
+    const fileInput = document.getElementById("gtfs_zip");
+    const filename = document.getElementById("filename");
+
+    fileInput.addEventListener("change", () => {
+      if (fileInput.files.length > 0) {
+        filename.textContent = "選択中: " + fileInput.files[0].name;
+      } else {
+        filename.textContent = "未選択";
+      }
+    });
+  </script>
 </body>
 </html>
