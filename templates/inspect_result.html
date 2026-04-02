@@ -145,16 +145,47 @@
 
     {% if commands %}
     <div class="card">
-      <h2>実行予定コマンド</h2>
+      <h2>実行コマンド</h2>
 
       <p><strong>stops.geojson 生成コマンド</strong></p>
       <pre>{{ commands.stops_command }}</pre>
 
-      <p><strong>animation.czml 生成コマンド</strong></p>
+      <p><strong>animation.czml 生成コマンド（まだ未実行）</strong></p>
       <pre>{{ commands.czml_command }}</pre>
 
       <p><strong>routes.geojson</strong></p>
       <p>{{ commands.routes_note }}</p>
+    </div>
+    {% endif %}
+
+    {% if stops_run %}
+    <div class="card">
+      <h2>stops.geojson 実行結果</h2>
+
+      <p>
+        <strong>return code:</strong>
+        {% if stops_run.returncode == 0 %}
+          <span class="ok">{{ stops_run.returncode }}</span>
+        {% else %}
+          <span class="ng">{{ stops_run.returncode }}</span>
+        {% endif %}
+      </p>
+
+      <p>
+        <strong>出力ファイル:</strong>
+        <code>{{ stops_run.output_path }}</code><br>
+        {% if stops_run.output_exists %}
+          <span class="ok">stops.geojson を生成できました。</span>
+        {% else %}
+          <span class="ng">stops.geojson が見つかりません。</span>
+        {% endif %}
+      </p>
+
+      <p><strong>stdout</strong></p>
+      <pre>{{ stops_run.stdout or "(出力なし)" }}</pre>
+
+      <p><strong>stderr</strong></p>
+      <pre>{{ stops_run.stderr or "(出力なし)" }}</pre>
     </div>
     {% endif %}
 

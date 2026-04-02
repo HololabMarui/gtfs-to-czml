@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import shlex
+import subprocess
 import tempfile
 import zipfile
 from pathlib import Path
@@ -8,6 +9,11 @@ from pathlib import Path
 from flask import Flask, render_template, request
 
 BASE_DIR = Path(__file__).resolve().parent
+TMP_DIR = BASE_DIR / "tmp"
+OUTPUTS_DIR = BASE_DIR / "outputs"
+
+TMP_DIR.mkdir(exist_ok=True)
+OUTPUTS_DIR.mkdir(exist_ok=True)
 
 app = Flask(__name__, template_folder=str(BASE_DIR / "templates"))
 
@@ -15,9 +21,6 @@ REQUIRED_FILES = ["routes.txt", "trips.txt", "stops.txt", "stop_times.txt"]
 
 
 def resolve_gtfs_root(extract_dir: Path) -> Path:
-    """
-    Zip直下に txt がある場合と、1階層下にまとまっている場合の両方に対応
-    """
     if list(extract_dir.glob("*.txt")):
         return extract_dir
 
@@ -38,7 +41,33 @@ def shell_join(cmd: list[str]) -> str:
     return " ".join(shlex.quote(part) for part in cmd)
 
 
-def build_commands(
+def build_stops_command(
+    gtfs_dir: str,
+    output_path: str,
+    marker_color: str,
+    marker_symbol: str,
+    marker_size: str,
+    route_ids: list[str],
+) -> list[str]:
+    script_path = BASE_DIR / "gtfs_stops_to_geojson.py"
+
+    cmd = [
+        "python3",
+        str(script_path),
+        "--gtfs-dir", gtfs_dir,
+        "--output", output_path,
+        "--marker-color", marker_color,
+        "--marker-symbol", marker_symbol,
+        "--marker-size", marker_size,
+    ]
+
+    for rid in route_ids:
+        cmd.extend(["--route-id", rid])
+
+    return cmd
+
+
+def build_czml_command_preview(
     gtfs_dir: str,
     service_date: str,
     tz: str,
@@ -47,32 +76,15 @@ def build_commands(
     fallback_mode: str,
     sample_every: str,
     trail: str,
-    marker_color: str,
-    marker_symbol: str,
-    marker_size: str,
     with_point: bool,
     clamp_to_ground: bool,
     debug: bool,
-) -> dict[str, str]:
-    stops_script = BASE_DIR / "gtfs_stops_to_geojson.py"
-    czml_script = BASE_DIR / "gtfsjp_to_czml.py"
+) -> str:
+    script_path = BASE_DIR / "gtfsjp_to_czml.py"
 
-    stops_cmd = [
+    cmd = [
         "python3",
-        str(stops_script),
-        "--gtfs-dir", gtfs_dir,
-        "--output", "stops.geojson",
-        "--marker-color", marker_color,
-        "--marker-symbol", marker_symbol,
-        "--marker-size", marker_size,
-    ]
-
-    for rid in route_ids:
-        stops_cmd.extend(["--route-id", rid])
-
-    czml_cmd = [
-        "python3",
-        str(czml_script),
+        str(script_path),
         "--gtfs-dir", gtfs_dir,
         "--service-date", service_date,
         "--tz", tz,
@@ -83,24 +95,30 @@ def build_commands(
     ]
 
     if model_url:
-        czml_cmd.extend(["--model-url", model_url])
+        cmd.extend(["--model-url", model_url])
 
     if with_point:
-        czml_cmd.append("--with-point")
+        cmd.append("--with-point")
 
     if clamp_to_ground:
-        czml_cmd.append("--clamp-to-ground")
+        cmd.append("--clamp-to-ground")
 
     if debug:
-        czml_cmd.append("--debug")
+        cmd.append("--debug")
 
     for rid in route_ids:
-        czml_cmd.extend(["--route-id", rid])
+        cmd.extend(["--route-id", rid])
 
+    return shell_join(cmd)
+
+
+def run_command(cmd: list[str]) -> dict:
+    proc = subprocess.run(cmd, capture_output=True, text=True)
     return {
-        "stops_command": shell_join(stops_cmd),
-        "czml_command": shell_join(czml_cmd),
-        "routes_note": "routes.geojson は次の段階で shapes.txt から生成する処理を追加予定です。",
+        "returncode": proc.returncode,
+        "stdout": proc.stdout,
+        "stderr": proc.stderr,
+        "command": shell_join(cmd),
     }
 
 
@@ -126,6 +144,7 @@ def inspect_zip():
             error="Zipファイルが選択されていません。",
             form_data={},
             commands=None,
+            stops_run=None,
         )
 
     if not uploaded.filename.lower().endswith(".zip"):
@@ -140,6 +159,7 @@ def inspect_zip():
             error="Zipファイルをアップロードしてください。",
             form_data={},
             commands=None,
+            stops_run=None,
         )
 
     service_date = request.form.get("service_date", "").strip()
@@ -174,7 +194,7 @@ def inspect_zip():
         "debug": debug,
     }
 
-    work_dir = Path(tempfile.mkdtemp(prefix="gtfsjp_"))
+    work_dir = Path(tempfile.mkdtemp(prefix="gtfsjp_", dir=str(TMP_DIR)))
     zip_path = work_dir / uploaded.filename
     extract_dir = work_dir / "extracted"
     extract_dir.mkdir(parents=True, exist_ok=True)
@@ -195,6 +215,7 @@ def inspect_zip():
             error="Zipの展開に失敗しました。壊れたZipの可能性があります。",
             form_data=form_data,
             commands=None,
+            stops_run=None,
         )
 
     gtfs_root = resolve_gtfs_root(extract_dir)
@@ -211,23 +232,49 @@ def inspect_zip():
     all_ok = all(item["exists"] for item in required_results)
 
     commands = None
+    stops_run = None
+
     if all_ok:
-        commands = build_commands(
+        stops_output = OUTPUTS_DIR / f"{work_dir.name}_stops.geojson"
+
+        stops_cmd = build_stops_command(
             gtfs_dir=str(gtfs_root),
-            service_date=service_date,
-            tz=tz,
-            route_ids=route_ids,
-            model_url=model_url,
-            fallback_mode=fallback_mode,
-            sample_every=sample_every,
-            trail=trail,
+            output_path=str(stops_output),
             marker_color=marker_color,
             marker_symbol=marker_symbol,
             marker_size=marker_size,
-            with_point=with_point,
-            clamp_to_ground=clamp_to_ground,
-            debug=debug,
+            route_ids=route_ids,
         )
+
+        stops_result = run_command(stops_cmd)
+        stops_exists = stops_output.exists()
+
+        stops_run = {
+            "command": stops_result["command"],
+            "returncode": stops_result["returncode"],
+            "stdout": stops_result["stdout"],
+            "stderr": stops_result["stderr"],
+            "output_path": str(stops_output),
+            "output_exists": stops_exists,
+        }
+
+        commands = {
+            "stops_command": stops_result["command"],
+            "czml_command": build_czml_command_preview(
+                gtfs_dir=str(gtfs_root),
+                service_date=service_date,
+                tz=tz,
+                route_ids=route_ids,
+                model_url=model_url,
+                fallback_mode=fallback_mode,
+                sample_every=sample_every,
+                trail=trail,
+                with_point=with_point,
+                clamp_to_ground=clamp_to_ground,
+                debug=debug,
+            ),
+            "routes_note": "routes.geojson は次の段階で shapes.txt から生成する処理を追加予定です。",
+        }
 
     return render_template(
         "inspect_result.html",
@@ -240,6 +287,7 @@ def inspect_zip():
         error=None,
         form_data=form_data,
         commands=commands,
+        stops_run=stops_run,
     )
 
 
