@@ -221,13 +221,13 @@ def build_routes_geojson(
     }
 
 
-@app.route("/", methods=["GET"])
+@app.route("/gtfs-to-czml/", methods=["GET"])
 def index():
     index_path = BASE_DIR / "docs" / "index.html"
     return index_path.read_text(encoding="utf-8")
 
 
-@app.route("/inspect", methods=["POST"])
+@app.route("/gtfs-to-czml/inspect", methods=["POST"])
 def inspect_zip():
     uploaded = request.files.get("gtfs_zip")
 
