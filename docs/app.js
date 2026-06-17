@@ -3,6 +3,18 @@
 // Python: gtfsjp_to_czml.py の主要ロジックを移植
 // ============================================================
 
+// ---------- Step indicator ----------
+function setStepActive(n) {
+  for (let i = 1; i <= 3; i++) {
+    const el = document.getElementById(`si-${i}`);
+    const line = el?.nextElementSibling;
+    el?.classList.remove('active', 'done');
+    if (i < n) { el?.classList.add('done'); if (line?.classList.contains('si-line')) line.classList.add('done'); }
+    else if (i === n) { el?.classList.add('active'); if (line?.classList.contains('si-line')) line.classList.remove('done'); }
+    else { if (line?.classList.contains('si-line')) line.classList.remove('done'); }
+  }
+}
+
 // ---------- DOM refs ----------
 const dropZone      = document.getElementById('drop-zone');
 const fileInput     = document.getElementById('file-input');
@@ -72,6 +84,7 @@ async function handleFile(file) {
 
   dropZone.classList.add('has-file');
   fileInfo.classList.remove('hidden');
+  setStepActive(2);
   fileInfo.innerHTML = `✅ ${file.name} (${(file.size / 1024).toFixed(0)} KB)`;
 
   await checkAndLoadZip();
@@ -198,6 +211,7 @@ async function runConvert() {
   setProgress(0);
   convertBtn.disabled = true;
   convertBtn.textContent = '変換中…';
+  setStepActive(3);
 
   try {
     const result = await buildCzml({ date });
@@ -844,4 +858,5 @@ function clearState() {
   convertBtn.disabled = true;
   convertBtn.textContent = '変換する';
   hideError();
+  setStepActive(1);
 }
