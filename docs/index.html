@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GTFS-JP → CZML 変換ツール</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>GTFS-JP → CZML 変換ツール</h1>
+      <p class="subtitle">GTFS-JP の ZIP ファイルを Cesium 用 CZML に変換します</p>
+    </header>
+
+    <!-- Step 1: ZIP upload -->
+    <section class="card" id="step-upload">
+      <div class="step-label">Step 1 — ZIPファイルを選択</div>
+      <div id="drop-zone" class="drop-zone" role="button" tabindex="0" aria-label="ZIPファイルを選択またはドロップ">
+        <div class="drop-icon">📦</div>
+        <div class="drop-text">クリックまたはここにドラッグ＆ドロップ</div>
+        <div class="drop-sub">GTFS-JP の ZIP ファイル</div>
+        <input type="file" id="file-input" accept=".zip" hidden>
+      </div>
+      <div id="file-info" class="file-info hidden"></div>
+      <div id="file-check" class="file-check hidden"></div>
+    </section>
+
+    <!-- Step 2: Settings -->
+    <section class="card" id="step-settings">
+      <div class="step-label">Step 2 — 設定</div>
+
+      <div class="field-group">
+        <label for="service-date">サービス日 <span class="required">必須</span></label>
+        <input type="date" id="service-date" name="service-date">
+      </div>
+
+      <div class="field-group">
+        <label for="route-select">対象路線</label>
+        <select id="route-select" disabled>
+          <option value="">（全路線）</option>
+        </select>
+        <div class="field-hint" id="route-hint">ZIPを読み込むと路線一覧が表示されます</div>
+      </div>
+
+      <details class="advanced-options">
+        <summary>詳細オプション</summary>
+        <div class="advanced-grid">
+
+          <div class="field-group">
+            <label for="model-url">モデルURL（GLB/GLTF）</label>
+            <input type="text" id="model-url" placeholder="https://example.com/bus.glb">
+          </div>
+
+          <div class="field-group">
+            <label for="model-scale">モデルスケール</label>
+            <input type="number" id="model-scale" value="1.0" min="0.01" step="0.1">
+          </div>
+
+          <div class="field-group">
+            <label for="line-width">ライン幅</label>
+            <input type="number" id="line-width" value="3" min="1" step="1">
+          </div>
+
+          <div class="field-group">
+            <label for="line-opacity">ライン不透明度 (0〜1)</label>
+            <input type="number" id="line-opacity" value="1.0" min="0" max="1" step="0.1">
+          </div>
+
+          <div class="field-group">
+            <label for="trail">トレイル秒数</label>
+            <input type="number" id="trail" value="0" min="0" step="10">
+          </div>
+
+          <div class="field-group">
+            <label for="sample-every">サンプル間隔（m）</label>
+            <input type="number" id="sample-every" value="50" min="1" step="10">
+          </div>
+
+          <div class="field-group">
+            <label for="fallback-mode">Shape なし便の扱い</label>
+            <select id="fallback-mode">
+              <option value="stops">stops — 停留所直線で代替</option>
+              <option value="none">none — スキップ（描画しない）</option>
+            </select>
+          </div>
+
+          <div class="field-group checkbox-group">
+            <label>
+              <input type="checkbox" id="clamp-to-ground">
+              ルート線を地表に追従させる（clampToGround）
+            </label>
+          </div>
+
+        </div>
+      </details>
+    </section>
+
+    <!-- Step 3: Convert -->
+    <section class="card" id="step-convert">
+      <div class="step-label">Step 3 — 変換・ダウンロード</div>
+      <button id="convert-btn" class="btn-primary" disabled>変換する</button>
+      <div id="progress-bar" class="progress-bar hidden">
+        <div id="progress-fill" class="progress-fill"></div>
+      </div>
+      <div id="log-area" class="log-area hidden"></div>
+      <div id="error-area" class="error-area hidden"></div>
+      <button id="download-btn" class="btn-download hidden">📥 CZML をダウンロード</button>
+    </section>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
