@@ -47,28 +47,83 @@ body {
   opacity: 0.8;
 }
 
-/* ===== Layout ===== */
-.layout {
+/* ===== Step indicator ===== */
+.step-indicator {
+  max-width: 980px;
+  margin: 0 auto 1.5rem;
+  padding: 0 1rem;
+  display: flex;
+  align-items: center;
+}
+
+.step-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+.si-circle {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #cbd5e1;
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.si-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #94a3b8;
+  white-space: nowrap;
+  transition: color 0.2s;
+}
+
+.step-item.active .si-circle,
+.step-item.done .si-circle {
+  background: var(--accent);
+}
+
+.step-item.done .si-circle::after {
+  content: "✓";
+}
+
+.step-item.done .si-circle { font-size: 0; }
+.step-item.done .si-circle::after { font-size: 0.85rem; }
+
+.step-item.active .si-label,
+.step-item.done .si-label {
+  color: var(--accent);
+}
+
+.si-line {
+  flex: 1;
+  height: 2px;
+  background: #e2e8f0;
+  margin: 0 0.5rem;
+  margin-bottom: 1.4rem;
+  transition: background 0.2s;
+}
+
+.si-line.done {
+  background: var(--accent);
+}
+
+/* ===== Container ===== */
+.container {
   max-width: 980px;
   margin: 0 auto;
   padding: 0 1rem 5rem;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1.25rem;
-  align-items: start;
-}
-
-.pane-left,
-.pane-right {
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
-}
-
-@media (max-width: 680px) {
-  .layout {
-    grid-template-columns: 1fr;
-  }
 }
 
 /* ===== Card ===== */

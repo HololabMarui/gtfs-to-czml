@@ -12,151 +12,162 @@
     <p class="subtitle">GTFS-JP の ZIP ファイルを Cesium 用 CZML に変換します</p>
   </header>
 
-  <div class="layout">
+  <!-- Step indicator -->
+  <div class="step-indicator">
+    <div class="step-item active" id="si-1">
+      <div class="si-circle">1</div>
+      <div class="si-label">ZIPを選択</div>
+    </div>
+    <div class="si-line"></div>
+    <div class="step-item" id="si-2">
+      <div class="si-circle">2</div>
+      <div class="si-label">設定</div>
+    </div>
+    <div class="si-line"></div>
+    <div class="step-item" id="si-3">
+      <div class="si-circle">3</div>
+      <div class="si-label">変換・DL</div>
+    </div>
+  </div>
 
-    <!-- 左ペイン: Step 1 + Step 2 -->
-    <div class="pane-left">
+  <div class="container">
 
-      <!-- Step 1: ZIP upload -->
-      <section class="card" id="step-upload">
-        <div class="step-label" data-step="1">ZIPファイルを選択</div>
-        <div id="drop-zone" class="drop-zone" role="button" tabindex="0" aria-label="ZIPファイルを選択またはドロップ">
-          <div class="drop-icon">📦</div>
-          <div class="drop-text">クリックまたはここにドラッグ＆ドロップ</div>
-          <div class="drop-sub">GTFS-JP の ZIP ファイル</div>
-          <input type="file" id="file-input" accept=".zip" hidden>
-        </div>
-        <div id="file-info" class="file-info hidden"></div>
-        <div id="file-check" class="file-check hidden"></div>
-      </section>
+    <!-- Step 1: ZIP upload -->
+    <section class="card" id="step-upload">
+      <div class="step-label" data-step="1">ZIPファイルを選択</div>
+      <div id="drop-zone" class="drop-zone" role="button" tabindex="0" aria-label="ZIPファイルを選択またはドロップ">
+        <div class="drop-icon">📦</div>
+        <div class="drop-text">クリックまたはここにドラッグ＆ドロップ</div>
+        <div class="drop-sub">GTFS-JP の ZIP ファイル</div>
+        <input type="file" id="file-input" accept=".zip" hidden>
+      </div>
+      <div id="file-info" class="file-info hidden"></div>
+      <div id="file-check" class="file-check hidden"></div>
+    </section>
 
-      <!-- Step 2: Settings -->
-      <section class="card" id="step-settings">
-        <div class="step-label" data-step="2">設定</div>
+    <!-- Step 2: Settings -->
+    <section class="card" id="step-settings">
+      <div class="step-label" data-step="2">設定</div>
 
-        <div class="field-group">
-          <label for="service-date">サービス日 <span class="required">必須</span></label>
-          <input type="date" id="service-date" name="service-date">
-        </div>
+      <div class="field-group">
+        <label for="service-date">サービス日 <span class="required">必須</span></label>
+        <input type="date" id="service-date" name="service-date">
+      </div>
 
-        <div class="field-group">
-          <label for="route-select">対象路線</label>
-          <select id="route-select" disabled>
-            <option value="">（全路線）</option>
-          </select>
-          <div class="field-hint" id="route-hint">ZIPを読み込むと路線一覧が表示されます</div>
-        </div>
+      <div class="field-group">
+        <label for="route-select">対象路線</label>
+        <select id="route-select" disabled>
+          <option value="">（全路線）</option>
+        </select>
+        <div class="field-hint" id="route-hint">ZIPを読み込むと路線一覧が表示されます</div>
+      </div>
 
-        <div id="route-colors-section" class="hidden">
-          <div class="section-label">路線色の設定</div>
-          <div id="route-colors-list" class="route-colors-list"></div>
-        </div>
+      <div id="route-colors-section" class="hidden">
+        <div class="section-label">路線色の設定</div>
+        <div id="route-colors-list" class="route-colors-list"></div>
+      </div>
 
-        <details class="advanced-options" id="stop-settings">
-          <summary>停留所マーカーの設定</summary>
-          <div class="advanced-grid">
+      <details class="advanced-options" id="stop-settings">
+        <summary>停留所マーカーの設定</summary>
+        <div class="advanced-grid">
 
-            <div class="field-group">
-              <label for="stop-color">マーカー色</label>
-              <div class="color-with-preview">
-                <input type="color" id="stop-color" value="#00f2ff">
-                <span id="stop-color-hex" class="color-hex-label">#00f2ff</span>
-              </div>
+          <div class="field-group">
+            <label for="stop-color">マーカー色</label>
+            <div class="color-with-preview">
+              <input type="color" id="stop-color" value="#00f2ff">
+              <span id="stop-color-hex" class="color-hex-label">#00f2ff</span>
             </div>
-
-            <div class="field-group">
-              <label for="stop-size">マーカーサイズ</label>
-              <select id="stop-size">
-                <option value="small">small（小）</option>
-                <option value="medium" selected>medium（中）</option>
-                <option value="large">large（大）</option>
-              </select>
-            </div>
-
-            <div class="field-group" style="grid-column: 1 / -1">
-              <label for="stop-symbol">マーカーシンボル（GeoJSON用 Maki アイコン）</label>
-              <select id="stop-symbol">
-                <option value="bus" selected>🚌 bus（バス）</option>
-                <option value="rail">🚃 rail（鉄道）</option>
-                <option value="rail-metro">🚇 rail-metro（地下鉄）</option>
-                <option value="rail-light">🚊 rail-light（路面電車）</option>
-                <option value="airport">✈️ airport（空港）</option>
-                <option value="ferry">⛴ ferry（フェリー）</option>
-                <option value="information">ℹ️ information（案内）</option>
-                <option value="marker">📍 marker（ピン）</option>
-                <option value="circle">⭕ circle（円）</option>
-              </select>
-            </div>
-
           </div>
-        </details>
 
-        <details class="advanced-options">
-          <summary>詳細オプション</summary>
-          <div class="advanced-grid">
-
-            <div class="field-group">
-              <label for="model-url">モデルURL（GLB/GLTF）</label>
-              <input type="text" id="model-url" placeholder="https://example.com/bus.glb">
-            </div>
-
-            <div class="field-group">
-              <label for="model-scale">モデルスケール</label>
-              <input type="number" id="model-scale" value="1.0" min="0.01" step="0.1">
-            </div>
-
-            <div class="field-group">
-              <label for="line-width">ライン幅</label>
-              <input type="number" id="line-width" value="3" min="1" step="1">
-            </div>
-
-            <div class="field-group">
-              <label for="line-opacity">ライン不透明度 (0〜1)</label>
-              <input type="number" id="line-opacity" value="1.0" min="0" max="1" step="0.1">
-            </div>
-
-            <div class="field-group">
-              <label for="trail">トレイル秒数</label>
-              <input type="number" id="trail" value="0" min="0" step="10">
-            </div>
-
-            <div class="field-group">
-              <label for="sample-every">サンプル間隔（m）</label>
-              <input type="number" id="sample-every" value="50" min="1" step="10">
-            </div>
-
-            <div class="field-group">
-              <label for="fallback-mode">Shape なし便の扱い</label>
-              <select id="fallback-mode">
-                <option value="stops">stops — 停留所直線で代替</option>
-                <option value="none">none — スキップ（描画しない）</option>
-              </select>
-            </div>
-
+          <div class="field-group">
+            <label for="stop-size">マーカーサイズ</label>
+            <select id="stop-size">
+              <option value="small">small（小）</option>
+              <option value="medium" selected>medium（中）</option>
+              <option value="large">large（大）</option>
+            </select>
           </div>
-        </details>
-      </section>
 
-    </div><!-- /pane-left -->
+          <div class="field-group" style="grid-column: 1 / -1">
+            <label for="stop-symbol">マーカーシンボル（GeoJSON用 Maki アイコン）</label>
+            <select id="stop-symbol">
+              <option value="bus" selected>🚌 bus（バス）</option>
+              <option value="rail">🚃 rail（鉄道）</option>
+              <option value="rail-metro">🚇 rail-metro（地下鉄）</option>
+              <option value="rail-light">🚊 rail-light（路面電車）</option>
+              <option value="airport">✈️ airport（空港）</option>
+              <option value="ferry">⛴ ferry（フェリー）</option>
+              <option value="information">ℹ️ information（案内）</option>
+              <option value="marker">📍 marker（ピン）</option>
+              <option value="circle">⭕ circle（円）</option>
+            </select>
+          </div>
 
-    <!-- 右ペイン: Step 3 -->
-    <div class="pane-right">
-      <section class="card" id="step-convert">
-        <div class="step-label" data-step="3">変換・ダウンロード</div>
-        <button id="convert-btn" class="btn-primary" disabled>変換する</button>
-        <div id="progress-bar" class="progress-bar hidden">
-          <div id="progress-fill" class="progress-fill"></div>
         </div>
-        <div id="log-area" class="log-area hidden"></div>
-        <div id="error-area" class="error-area hidden"></div>
-        <div id="download-group" class="download-group hidden">
-          <button id="download-czml-btn" class="btn-download">📥 CZML をダウンロード（走行アニメーション）</button>
-          <button id="download-stops-btn" class="btn-download btn-download-sub">📍 stops.geojson をダウンロード（停留所）</button>
-        </div>
-      </section>
-    </div><!-- /pane-right -->
+      </details>
 
-  </div><!-- /layout -->
+      <details class="advanced-options">
+        <summary>詳細オプション</summary>
+        <div class="advanced-grid">
+
+          <div class="field-group">
+            <label for="model-url">モデルURL（GLB/GLTF）</label>
+            <input type="text" id="model-url" placeholder="https://example.com/bus.glb">
+          </div>
+
+          <div class="field-group">
+            <label for="model-scale">モデルスケール</label>
+            <input type="number" id="model-scale" value="1.0" min="0.01" step="0.1">
+          </div>
+
+          <div class="field-group">
+            <label for="line-width">ライン幅</label>
+            <input type="number" id="line-width" value="3" min="1" step="1">
+          </div>
+
+          <div class="field-group">
+            <label for="line-opacity">ライン不透明度 (0〜1)</label>
+            <input type="number" id="line-opacity" value="1.0" min="0" max="1" step="0.1">
+          </div>
+
+          <div class="field-group">
+            <label for="trail">トレイル秒数</label>
+            <input type="number" id="trail" value="0" min="0" step="10">
+          </div>
+
+          <div class="field-group">
+            <label for="sample-every">サンプル間隔（m）</label>
+            <input type="number" id="sample-every" value="50" min="1" step="10">
+          </div>
+
+          <div class="field-group">
+            <label for="fallback-mode">Shape なし便の扱い</label>
+            <select id="fallback-mode">
+              <option value="stops">stops — 停留所直線で代替</option>
+              <option value="none">none — スキップ（描画しない）</option>
+            </select>
+          </div>
+
+        </div>
+      </details>
+    </section>
+
+    <!-- Step 3: Convert -->
+    <section class="card" id="step-convert">
+      <div class="step-label" data-step="3">変換・ダウンロード</div>
+      <button id="convert-btn" class="btn-primary" disabled>変換する</button>
+      <div id="progress-bar" class="progress-bar hidden">
+        <div id="progress-fill" class="progress-fill"></div>
+      </div>
+      <div id="log-area" class="log-area hidden"></div>
+      <div id="error-area" class="error-area hidden"></div>
+      <div id="download-group" class="download-group hidden">
+        <button id="download-czml-btn" class="btn-download">📥 CZML をダウンロード（走行アニメーション）</button>
+        <button id="download-stops-btn" class="btn-download btn-download-sub">📍 stops.geojson をダウンロード（停留所）</button>
+      </div>
+    </section>
+
+  </div>
 
   <script src="lib/jszip.min.js"></script>
   <script src="lib/papaparse.min.js"></script>
