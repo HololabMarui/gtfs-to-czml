@@ -11,16 +11,19 @@ const fileCheck     = document.getElementById('file-check');
 const serviceDate   = document.getElementById('service-date');
 const routeSelect   = document.getElementById('route-select');
 const routeHint     = document.getElementById('route-hint');
-const convertBtn    = document.getElementById('convert-btn');
-const downloadBtn   = document.getElementById('download-btn');
-const progressBar   = document.getElementById('progress-bar');
-const progressFill  = document.getElementById('progress-fill');
-const logArea       = document.getElementById('log-area');
-const errorArea     = document.getElementById('error-area');
+const convertBtn      = document.getElementById('convert-btn');
+const downloadGroup   = document.getElementById('download-group');
+const downloadCzmlBtn = document.getElementById('download-czml-btn');
+const downloadStopsBtn= document.getElementById('download-stops-btn');
+const progressBar     = document.getElementById('progress-bar');
+const progressFill    = document.getElementById('progress-fill');
+const logArea         = document.getElementById('log-area');
+const errorArea       = document.getElementById('error-area');
 
 // ---------- State ----------
-let loadedZip = null;
-let czmlBlob  = null;
+let loadedZip  = null;
+let czmlBlob   = null;
+let stopsBlob  = null;
 let zipFileName = '';
 let routeColorMap = {}; // route_id → '#RRGGBB'
 
@@ -170,8 +173,9 @@ async function runConvert() {
   if (!date) { showError('サービス日を入力してください。'); return; }
 
   hideError();
-  czmlBlob = null;
-  downloadBtn.classList.add('hidden');
+  czmlBlob  = null;
+  stopsBlob = null;
+  downloadGroup.classList.add('hidden');
   logArea.classList.remove('hidden');
   logArea.innerHTML = '';
   progressBar.classList.remove('hidden');
@@ -179,12 +183,12 @@ async function runConvert() {
   convertBtn.disabled = true;
 
   try {
-    czmlBlob = await buildCzml({ date });
-    if (czmlBlob) {
-      log('✅ CZML 生成完了', 'ok');
-      downloadBtn.classList.remove('hidden');
-      setProgress(100);
-    }
+    const result = await buildCzml({ date });
+    czmlBlob  = result.czml;
+    stopsBlob = result.stops;
+    log('✅ 変換完了', 'ok');
+    downloadGroup.classList.remove('hidden');
+    setProgress(100);
   } catch (e) {
     showError(e.message || String(e));
     log('❌ ' + (e.message || e), 'error');
@@ -342,20 +346,57 @@ async function buildCzml({ date }) {
     czml[0].clock.currentTime = toIsoUtc(docStart);
   }
 
+  setProgress(90);
+
+  // Build stops GeoJSON from used stop IDs
+  const usedStopIds = new Set();
+  for (const t of trips) {
+    const st = stopTimesByTrip[t.trip_id] || [];
+    for (const r of st) { if (r.stop_id) usedStopIds.add(r.stop_id); }
+  }
+  const stopFeatures = [];
+  for (const stopId of usedStopIds) {
+    const s = stopsById[stopId];
+    if (!s || !s.stop_lat || !s.stop_lon) continue;
+    stopFeatures.push({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [parseFloat(s.stop_lon), parseFloat(s.stop_lat)] },
+      properties: {
+        stop_id:   s.stop_id,
+        stop_name: s.stop_name || '',
+        stop_code: s.stop_code || '',
+        'marker-color':  '#00f2ff',
+        'marker-symbol': 'bus',
+        'marker-size':   'small'
+      }
+    });
+  }
+  const stopsGeoJson = { type: 'FeatureCollection', features: stopFeatures };
+  log(`📍 停留所: ${stopFeatures.length} 件 → stops.geojson`, 'ok');
+
   setProgress(95);
-  const json = JSON.stringify(czml, null, 2);
-  return new Blob([json], { type: 'application/json' });
+  return {
+    czml:  new Blob([JSON.stringify(czml,  null, 2)], { type: 'application/json' }),
+    stops: new Blob([JSON.stringify(stopsGeoJson, null, 2)], { type: 'application/json' })
+  };
 }
 
 // ---------- Download ----------
-downloadBtn.addEventListener('click', () => {
-  if (!czmlBlob) return;
-  const url = URL.createObjectURL(czmlBlob);
+function triggerDownload(blob, filename) {
+  const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = (zipFileName || 'output') + '.czml';
+  a.download = filename;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+downloadCzmlBtn.addEventListener('click', () => {
+  if (czmlBlob) triggerDownload(czmlBlob, (zipFileName || 'output') + '.czml');
+});
+
+downloadStopsBtn.addEventListener('click', () => {
+  if (stopsBlob) triggerDownload(stopsBlob, (zipFileName || 'output') + '_stops.geojson');
 });
 
 // ============================================================
@@ -616,6 +657,7 @@ function buildTripEntity(tripId, samples, modelUrl, modelScale, trailSec, isFall
     id: `trip-${tripId}`,
     name: `trip ${tripId}`,
     availability: avail,
+    show: true,
     position: {
       epoch,
       cartographicDegrees: posArr,
@@ -636,12 +678,13 @@ function buildTripEntity(tripId, samples, modelUrl, modelScale, trailSec, isFall
       heightReference: 'RELATIVE_TO_GROUND'
     };
   } else {
-    // No model URL: show a colored box as a stand-in
-    const boxColor = parseHexColor(routeHex || '#0080ff');
-    ent.box = {
-      dimensions: { cartesian: [3.0, 3.0, 3.0] },
-      fill: true,
-      material: { solidColor: { color: { rgba: boxColor } } },
+    // モデルURLなし: 路線色の大きめ丸点で走行位置を表示
+    const ptColor = parseHexColor(routeHex || '#0080ff');
+    ent.point = {
+      pixelSize: 14,
+      color: { rgba: ptColor },
+      outlineColor: { rgba: [255, 255, 255, 200] },
+      outlineWidth: 2,
       heightReference: 'RELATIVE_TO_GROUND'
     };
   }
@@ -729,7 +772,7 @@ function clearState() {
   logArea.classList.add('hidden');
   logArea.innerHTML = '';
   progressBar.classList.add('hidden');
-  downloadBtn.classList.add('hidden');
+  downloadGroup.classList.add('hidden');
   routeSelect.innerHTML = '<option value="">（全路線）</option>';
   routeSelect.disabled = true;
   routeHint.textContent = 'ZIPを読み込むと路線一覧が表示されます';

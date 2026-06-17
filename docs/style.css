@@ -325,6 +325,17 @@ input:disabled, select:disabled {
 
 .btn-download:hover { background: #15803d; }
 
+.btn-download-sub {
+  background: #0369a1;
+}
+.btn-download-sub:hover { background: #075985; }
+
+.download-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
 /* Progress */
 .progress-bar {
   width: 100%;
