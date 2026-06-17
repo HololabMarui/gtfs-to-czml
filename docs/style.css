@@ -49,7 +49,7 @@ body {
 
 /* ===== Container ===== */
 .container {
-  max-width: 660px;
+  max-width: 980px;
   margin: 0 auto;
   padding: 0 1rem;
   display: flex;
