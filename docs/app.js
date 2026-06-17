@@ -19,6 +19,8 @@ const progressBar     = document.getElementById('progress-bar');
 const progressFill    = document.getElementById('progress-fill');
 const logArea         = document.getElementById('log-area');
 const errorArea       = document.getElementById('error-area');
+const stopColorInput  = document.getElementById('stop-color');
+const stopColorHex    = document.getElementById('stop-color-hex');
 
 // ---------- State ----------
 let loadedZip  = null;
@@ -29,6 +31,11 @@ let routeColorMap = {}; // route_id → '#RRGGBB'
 
 // ---------- Init ----------
 serviceDate.value = new Date().toISOString().slice(0, 10);
+
+// Sync color hex label
+stopColorInput.addEventListener('input', () => {
+  stopColorHex.textContent = stopColorInput.value;
+});
 
 // ---------- Drop zone ----------
 dropZone.addEventListener('click', () => fileInput.click());
@@ -204,6 +211,11 @@ async function buildCzml({ date }) {
   const lineOpacity = parseFloat(document.getElementById('line-opacity').value);
   const trail       = parseFloat(document.getElementById('trail').value) || 0;
   const sampleEvery = parseFloat(document.getElementById('sample-every').value) || 50;
+  // 停留所マーカー設定
+  const stopColor   = document.getElementById('stop-color').value || '#00f2ff';
+  const stopSizeStr = document.getElementById('stop-size').value;
+  const stopSymbol  = document.getElementById('stop-symbol').value || 'bus';
+  const stopPixelSize = stopSizeStr === 'small' ? 6 : stopSizeStr === 'large' ? 14 : 10;
   const fallback    = document.getElementById('fallback-mode').value;
   const clamp       = document.getElementById('clamp-to-ground').checked;
   const routeFilter = routeSelect.value ? [routeSelect.value] : null;
@@ -348,12 +360,19 @@ async function buildCzml({ date }) {
 
   setProgress(90);
 
-  // Build stops GeoJSON from used stop IDs
+  // Collect used stop IDs
   const usedStopIds = new Set();
   for (const t of trips) {
     const st = stopTimesByTrip[t.trip_id] || [];
     for (const r of st) { if (r.stop_id) usedStopIds.add(r.stop_id); }
   }
+
+  // Add stop point entities to CZML (CLAMP_TO_GROUND で地上配置)
+  const stopEntities = buildStopEntities(stopsById, usedStopIds, stopColor, stopPixelSize);
+  czml.push(...stopEntities);
+  log(`📍 停留所: ${stopEntities.length} 件 → CZML + stops.geojson`, 'ok');
+
+  // Build stops GeoJSON with selected marker settings
   const stopFeatures = [];
   for (const stopId of usedStopIds) {
     const s = stopsById[stopId];
@@ -365,14 +384,13 @@ async function buildCzml({ date }) {
         stop_id:   s.stop_id,
         stop_name: s.stop_name || '',
         stop_code: s.stop_code || '',
-        'marker-color':  '#00f2ff',
-        'marker-symbol': 'bus',
-        'marker-size':   'small'
+        'marker-color':  stopColor,
+        'marker-symbol': stopSymbol,
+        'marker-size':   stopSizeStr
       }
     });
   }
   const stopsGeoJson = { type: 'FeatureCollection', features: stopFeatures };
-  log(`📍 停留所: ${stopFeatures.length} 件 → stops.geojson`, 'ok');
 
   setProgress(95);
   return {
@@ -675,21 +693,46 @@ function buildTripEntity(tripId, samples, modelUrl, modelScale, trailSec, isFall
       scale: modelScale,
       minimumPixelSize: 48,
       shadows: 'ENABLED',
-      heightReference: 'RELATIVE_TO_GROUND'
+      heightReference: 'CLAMP_TO_GROUND'
     };
   } else {
-    // モデルURLなし: 路線色の大きめ丸点で走行位置を表示
+    // モデルURLなし: 路線色の大きめ丸点で走行位置を表示（地表クランプ）
     const ptColor = parseHexColor(routeHex || '#0080ff');
     ent.point = {
       pixelSize: 14,
       color: { rgba: ptColor },
       outlineColor: { rgba: [255, 255, 255, 200] },
       outlineWidth: 2,
-      heightReference: 'RELATIVE_TO_GROUND'
+      heightReference: 'CLAMP_TO_GROUND'
     };
   }
 
   return ent;
+}
+
+// 停留所を CZML point entity として生成（地表クランプ）
+function buildStopEntities(stopsById, usedStopIds, markerColor, markerPixelSize) {
+  const rgba = parseHexColor(markerColor);
+  const entities = [];
+  for (const stopId of usedStopIds) {
+    const s = stopsById[stopId];
+    if (!s || !s.stop_lat || !s.stop_lon) continue;
+    entities.push({
+      id:   `stop-${s.stop_id}`,
+      name: s.stop_name || s.stop_id,
+      position: {
+        cartographicDegrees: [parseFloat(s.stop_lon), parseFloat(s.stop_lat), 0]
+      },
+      point: {
+        pixelSize: markerPixelSize,
+        color: { rgba },
+        outlineColor: { rgba: [255, 255, 255, 200] },
+        outlineWidth: 1.5,
+        heightReference: 'CLAMP_TO_GROUND'
+      }
+    });
+  }
+  return entities;
 }
 
 // ============================================================

@@ -48,6 +48,46 @@
         <div id="route-colors-list" class="route-colors-list"></div>
       </div>
 
+      <details class="advanced-options" id="stop-settings">
+        <summary>停留所マーカーの設定</summary>
+        <div class="advanced-grid">
+
+          <div class="field-group">
+            <label for="stop-color">マーカー色</label>
+            <div class="color-with-preview">
+              <input type="color" id="stop-color" value="#00f2ff">
+              <span id="stop-color-hex" class="color-hex-label">#00f2ff</span>
+            </div>
+          </div>
+
+          <div class="field-group">
+            <label for="stop-size">マーカーサイズ</label>
+            <select id="stop-size">
+              <option value="small">small（小）</option>
+              <option value="medium" selected>medium（中）</option>
+              <option value="large">large（大）</option>
+            </select>
+          </div>
+
+          <div class="field-group" style="grid-column: 1 / -1">
+            <label for="stop-symbol">マーカーシンボル（GeoJSON用 Maki アイコン）</label>
+            <select id="stop-symbol">
+              <option value="bus" selected>🚌 bus（バス）</option>
+              <option value="rail">🚃 rail（鉄道）</option>
+              <option value="rail-metro">🚇 rail-metro（地下鉄）</option>
+              <option value="rail-light">🚊 rail-light（路面電車）</option>
+              <option value="airport">✈️ airport（空港）</option>
+              <option value="ferry">⛴ ferry（フェリー）</option>
+              <option value="information">ℹ️ information（案内）</option>
+              <option value="marker">📍 marker（ピン）</option>
+              <option value="circle">⭕ circle（円）</option>
+            </select>
+            <div class="field-hint">CZML内では色付き丸点として描画されます（シンボル形状はGeoJSON読込時に適用）</div>
+          </div>
+
+        </div>
+      </details>
+
       <details class="advanced-options">
         <summary>詳細オプション</summary>
         <div class="advanced-grid">
