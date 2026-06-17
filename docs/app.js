@@ -22,6 +22,7 @@ const errorArea     = document.getElementById('error-area');
 let loadedZip = null;
 let czmlBlob  = null;
 let zipFileName = '';
+let routeColorMap = {}; // route_id → '#RRGGBB'
 
 // ---------- Init ----------
 serviceDate.value = new Date().toISOString().slice(0, 10);
@@ -110,15 +111,54 @@ async function checkAndLoadZip() {
 
 function populateRouteSelect(routes) {
   routeSelect.innerHTML = '<option value="">（全路線）</option>';
+  routeColorMap = {};
+
+  const colorSection = document.getElementById('route-colors-section');
+  const colorList    = document.getElementById('route-colors-list');
+  colorList.innerHTML = '';
+
   for (const r of routes) {
     const opt = document.createElement('option');
     opt.value = r.route_id || '';
     const label = [r.route_short_name, r.route_long_name].filter(Boolean).join(' / ') || r.route_id;
     opt.textContent = `${r.route_id} — ${label}`;
     routeSelect.appendChild(opt);
+
+    // Default color: from route_color field or fallback blue
+    const defaultHex = r.route_color
+      ? '#' + r.route_color.replace(/^#/, '')
+      : '#0080ff';
+    routeColorMap[r.route_id] = defaultHex;
+
+    // Color picker row
+    const row = document.createElement('div');
+    row.className = 'route-color-row';
+
+    const picker = document.createElement('input');
+    picker.type = 'color';
+    picker.value = defaultHex;
+    picker.dataset.routeId = r.route_id;
+    picker.addEventListener('input', e => {
+      routeColorMap[e.target.dataset.routeId] = e.target.value;
+    });
+
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'route-color-name';
+    nameSpan.textContent = label;
+
+    const idSpan = document.createElement('span');
+    idSpan.className = 'route-color-id';
+    idSpan.textContent = r.route_id;
+
+    row.appendChild(picker);
+    row.appendChild(nameSpan);
+    row.appendChild(idSpan);
+    colorList.appendChild(row);
   }
+
   routeSelect.disabled = false;
   routeHint.textContent = `${routes.length} 路線を読み込みました`;
+  colorSection.classList.remove('hidden');
 }
 
 // ---------- Convert ----------
@@ -262,8 +302,8 @@ async function buildCzml({ date }) {
 
     // Route line (once per route×shape)
     if (!emittedRouteShapes.has(routeShapeKey)) {
-      const routeRow = routesById[routeId] || {};
-      const color = parseHexColor(routeRow.route_color);
+      const hexColor = routeColorMap[routeId] || ('#' + (routesById[routeId] || {}).route_color || '#0080ff');
+      const color = parseHexColor(hexColor);
       const colorWithOpacity = withOpacity(color, lineOpacity);
       czml.push(buildRouteEntity(routeShapeKey, useShape, colorWithOpacity, lineWidth, clamp));
       emittedRouteShapes.add(routeShapeKey);
@@ -278,7 +318,8 @@ async function buildCzml({ date }) {
     if (!docStart || s0 < docStart) docStart = s0;
     if (!docEnd   || sN > docEnd)   docEnd   = sN;
 
-    czml.push(buildTripEntity(tripId, samples, modelUrl, modelScale, trail, isFallback));
+    const routeHex = routeColorMap[routeId] || '#0080ff';
+    czml.push(buildTripEntity(tripId, samples, modelUrl, modelScale, trail, isFallback, routeHex));
     tripCount++;
 
     if ((i + 1) % 20 === 0) {
@@ -561,7 +602,7 @@ function buildRouteEntity(key, shape, color, width, clamp) {
   return e;
 }
 
-function buildTripEntity(tripId, samples, modelUrl, modelScale, trailSec, isFallback) {
+function buildTripEntity(tripId, samples, modelUrl, modelScale, trailSec, isFallback, routeHex) {
   const epoch = new Date(samples[0][0]).toISOString().replace('.000Z', 'Z');
   const t0Ms  = samples[0][0];
   const posArr = [];
@@ -592,6 +633,15 @@ function buildTripEntity(tripId, samples, modelUrl, modelScale, trailSec, isFall
       scale: modelScale,
       minimumPixelSize: 48,
       shadows: 'ENABLED',
+      heightReference: 'RELATIVE_TO_GROUND'
+    };
+  } else {
+    // No model URL: show a colored box as a stand-in
+    const boxColor = parseHexColor(routeHex || '#0080ff');
+    ent.box = {
+      dimensions: { cartesian: [3.0, 3.0, 3.0] },
+      fill: true,
+      material: { solidColor: { color: { rgba: boxColor } } },
       heightReference: 'RELATIVE_TO_GROUND'
     };
   }
@@ -683,6 +733,9 @@ function clearState() {
   routeSelect.innerHTML = '<option value="">（全路線）</option>';
   routeSelect.disabled = true;
   routeHint.textContent = 'ZIPを読み込むと路線一覧が表示されます';
+  routeColorMap = {};
+  document.getElementById('route-colors-section').classList.add('hidden');
+  document.getElementById('route-colors-list').innerHTML = '';
   convertBtn.disabled = true;
   hideError();
 }
