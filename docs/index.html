@@ -7,15 +7,15 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <header class="site-header">
+    <h1>GTFS-JP → CZML 変換ツール</h1>
+    <p class="subtitle">GTFS-JP の ZIP ファイルを Cesium 用 CZML に変換します</p>
+  </header>
   <div class="container">
-    <header>
-      <h1>GTFS-JP → CZML 変換ツール</h1>
-      <p class="subtitle">GTFS-JP の ZIP ファイルを Cesium 用 CZML に変換します</p>
-    </header>
 
     <!-- Step 1: ZIP upload -->
     <section class="card" id="step-upload">
-      <div class="step-label">Step 1 — ZIPファイルを選択</div>
+      <div class="step-label" data-step="1">ZIPファイルを選択</div>
       <div id="drop-zone" class="drop-zone" role="button" tabindex="0" aria-label="ZIPファイルを選択またはドロップ">
         <div class="drop-icon">📦</div>
         <div class="drop-text">クリックまたはここにドラッグ＆ドロップ</div>
@@ -28,7 +28,7 @@
 
     <!-- Step 2: Settings -->
     <section class="card" id="step-settings">
-      <div class="step-label">Step 2 — 設定</div>
+      <div class="step-label" data-step="2">設定</div>
 
       <div class="field-group">
         <label for="service-date">サービス日 <span class="required">必須</span></label>
@@ -82,7 +82,6 @@
               <option value="marker">📍 marker（ピン）</option>
               <option value="circle">⭕ circle（円）</option>
             </select>
-            <div class="field-hint">CZML内では色付き丸点として描画されます（シンボル形状はGeoJSON読込時に適用）</div>
           </div>
 
         </div>
@@ -136,7 +135,7 @@
 
     <!-- Step 3: Convert -->
     <section class="card" id="step-convert">
-      <div class="step-label">Step 3 — 変換・ダウンロード</div>
+      <div class="step-label" data-step="3">変換・ダウンロード</div>
       <button id="convert-btn" class="btn-primary" disabled>変換する</button>
       <div id="progress-bar" class="progress-bar hidden">
         <div id="progress-fill" class="progress-fill"></div>
