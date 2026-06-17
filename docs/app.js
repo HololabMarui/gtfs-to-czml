@@ -143,6 +143,7 @@ function populateRouteSelect(routes) {
     // Color picker row
     const row = document.createElement('div');
     row.className = 'route-color-row';
+    row.dataset.routeId = r.route_id;
 
     const picker = document.createElement('input');
     picker.type = 'color';
@@ -169,6 +170,14 @@ function populateRouteSelect(routes) {
   routeSelect.disabled = false;
   routeHint.textContent = `${routes.length} 路線を読み込みました`;
   colorSection.classList.remove('hidden');
+
+  // 路線選択変更 → カラーピッカーを絞り込み表示
+  routeSelect.onchange = () => {
+    const selected = routeSelect.value;
+    for (const row of colorList.querySelectorAll('.route-color-row')) {
+      row.style.display = (!selected || row.dataset.routeId === selected) ? '' : 'none';
+    }
+  };
 }
 
 // ---------- Convert ----------
@@ -188,6 +197,7 @@ async function runConvert() {
   progressBar.classList.remove('hidden');
   setProgress(0);
   convertBtn.disabled = true;
+  convertBtn.textContent = '変換中…';
 
   try {
     const result = await buildCzml({ date });
@@ -196,9 +206,11 @@ async function runConvert() {
     log('✅ 変換完了', 'ok');
     downloadGroup.classList.remove('hidden');
     setProgress(100);
+    convertBtn.textContent = '再変換する';
   } catch (e) {
     showError(e.message || String(e));
     log('❌ ' + (e.message || e), 'error');
+    convertBtn.textContent = '変換する';
   } finally {
     convertBtn.disabled = false;
   }
@@ -217,30 +229,28 @@ async function buildCzml({ date }) {
   const stopSymbol  = document.getElementById('stop-symbol').value || 'bus';
   const stopPixelSize = stopSizeStr === 'small' ? 6 : stopSizeStr === 'large' ? 14 : 10;
   const fallback    = document.getElementById('fallback-mode').value;
-  const clamp       = document.getElementById('clamp-to-ground').checked;
+  const clamp       = true;
   const routeFilter = routeSelect.value ? [routeSelect.value] : null;
 
   log('📂 GTFSファイルを読み込み中…', 'info');
   setProgress(5);
 
-  const routesRaw    = await readTextFromZip(loadedZip, 'routes.txt');
-  const tripsRaw     = await readTextFromZip(loadedZip, 'trips.txt');
-  const stopTimesRaw = await readTextFromZip(loadedZip, 'stop_times.txt');
-  const stopsRaw     = await readTextFromZip(loadedZip, 'stops.txt');
-  const shapesRaw    = await readTextFromZipOpt(loadedZip, 'shapes.txt');
-  const calRaw       = await readTextFromZipOpt(loadedZip, 'calendar.txt');
-  const calDatesRaw  = await readTextFromZipOpt(loadedZip, 'calendar_dates.txt');
+  const routesRaw   = await readTextFromZip(loadedZip, 'routes.txt');
+  const tripsRaw    = await readTextFromZip(loadedZip, 'trips.txt');
+  const stopsRaw    = await readTextFromZip(loadedZip, 'stops.txt');
+  const shapesRaw   = await readTextFromZipOpt(loadedZip, 'shapes.txt');
+  const calRaw      = await readTextFromZipOpt(loadedZip, 'calendar.txt');
+  const calDatesRaw = await readTextFromZipOpt(loadedZip, 'calendar_dates.txt');
 
   setProgress(15);
   log('📋 CSV をパース中…', 'info');
 
-  const routesArr    = parseCsv(routesRaw);
-  const tripsArr     = parseCsv(tripsRaw);
-  const stopTimesArr = parseCsv(stopTimesRaw);
-  const stopsArr     = parseCsv(stopsRaw);
-  const shapesArr    = shapesRaw ? parseCsv(shapesRaw) : [];
-  const calArr       = calRaw    ? parseCsv(calRaw)    : [];
-  const calDatesArr  = calDatesRaw ? parseCsv(calDatesRaw) : [];
+  const routesArr   = parseCsv(routesRaw);
+  const tripsArr    = parseCsv(tripsRaw);
+  const stopsArr    = parseCsv(stopsRaw);
+  const shapesArr   = shapesRaw   ? parseCsv(shapesRaw)   : [];
+  const calArr      = calRaw      ? parseCsv(calRaw)      : [];
+  const calDatesArr = calDatesRaw ? parseCsv(calDatesRaw) : [];
 
   // Build lookup maps
   const routesById = {};
@@ -249,16 +259,15 @@ async function buildCzml({ date }) {
   const stopsById = {};
   for (const s of stopsArr) stopsById[s.stop_id] = s;
 
-  // stop_times by trip_id
-  const stopTimesByTrip = {};
-  for (const st of stopTimesArr) {
-    const tid = st.trip_id;
-    if (!tid) continue;
-    (stopTimesByTrip[tid] = stopTimesByTrip[tid] || []).push(st);
-  }
+  // stop_times: ストリーミングで trip_id ごとにグループ化（大容量対策）
+  setProgress(20);
+  log('🕐 stop_times.txt を読み込み中…', 'info');
+  const stopTimesRaw = await readTextFromZip(loadedZip, 'stop_times.txt');
+  const stopTimesByTrip = parseCsvStreaming(stopTimesRaw, row => row.trip_id);
   for (const tid in stopTimesByTrip) {
     stopTimesByTrip[tid].sort((a, b) => parseInt(a.stop_sequence) - parseInt(b.stop_sequence));
   }
+  log(`🕐 stop_times: ${Object.keys(stopTimesByTrip).length} trips`, 'info');
 
   setProgress(25);
   log(`📍 shapes.txt: ${shapesArr.length > 0 ? shapesArr.length + ' 行' : 'なし（フォールバックモード: ' + fallback + '）'}`, 'info');
@@ -270,10 +279,11 @@ async function buildCzml({ date }) {
   const activeServices = servicesActiveOn(calArr, calDatesArr, date, serviceDay);
   log(`📅 運行サービス: ${activeServices.size} 件 (${date})`, 'info');
 
-  // Filter trips
+  // Filter trips（calendar なし = __all__ の場合は全便を対象）
+  const ignoreCalendar = activeServices.has('__all__');
   let trips = tripsArr;
   if (routeFilter) trips = trips.filter(t => routeFilter.includes(t.route_id));
-  trips = trips.filter(t => activeServices.has(t.service_id));
+  if (!ignoreCalendar) trips = trips.filter(t => activeServices.has(t.service_id));
 
   if (trips.length === 0) {
     throw new Error(`有効な trip が見つかりません。service-date (${date}) に運行する便がないか、route_id の指定を確認してください。`);
@@ -554,13 +564,6 @@ function servicesActiveOn(calArr, calDatesArr, dateStr, serviceDay) {
   return active;
 }
 
-// Patch trips filter when no calendar data
-const _origFilter = Array.prototype.filter;
-function tripsActiveOn(trips, activeServices) {
-  if (activeServices.has('__all__')) return trips;
-  return trips.filter(t => activeServices.has(t.service_id));
-}
-
 // --- Parse GTFS time "HH:MM:SS" → seconds since midnight (supports >24h) ---
 function parseGtfsTime(s) {
   if (!s || !s.trim()) return null;
@@ -778,6 +781,22 @@ function parseCsv(text) {
   return result.data;
 }
 
+// stop_times など大容量ファイル用: 行ごとにグループキーで振り分け
+function parseCsvStreaming(text, keyFn) {
+  const groups = {};
+  Papa.parse(text.replace(/^﻿/, ''), {
+    header: true,
+    skipEmptyLines: true,
+    trimHeaders: true,
+    step: ({ data }) => {
+      const key = keyFn(data);
+      if (!key) return;
+      (groups[key] = groups[key] || []).push(data);
+    }
+  });
+  return groups;
+}
+
 function yieldFrame() {
   return new Promise(r => requestAnimationFrame(r));
 }
@@ -823,5 +842,6 @@ function clearState() {
   document.getElementById('route-colors-section').classList.add('hidden');
   document.getElementById('route-colors-list').innerHTML = '';
   convertBtn.disabled = true;
+  convertBtn.textContent = '変換する';
   hideError();
 }
