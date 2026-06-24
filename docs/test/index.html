@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GTFS-JP Maker</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="site-header">
+    <h1>GTFS-JP Maker</h1>
+    <p class="subtitle">PDF時刻表 → AI → 中間CSV → GTFS-JP ZIP → CZML / GeoJSON</p>
+  </header>
+
+  <!-- Tab navigation -->
+  <nav class="tab-nav" role="tablist">
+    <button class="tab-btn active" data-tab="tab-step1" role="tab" aria-selected="true">
+      <span class="tab-num">1</span><span class="tab-label">AIでCSV作成</span>
+    </button>
+    <div class="tab-arrow">›</div>
+    <button class="tab-btn" data-tab="tab-step2" role="tab" aria-selected="false">
+      <span class="tab-num">2</span><span class="tab-label">CSV → GTFS-JP</span>
+    </button>
+    <div class="tab-arrow">›</div>
+    <button class="tab-btn" data-tab="tab-step3" role="tab" aria-selected="false">
+      <span class="tab-num">3</span><span class="tab-label">GTFS-JP → CZML/GeoJSON</span>
+    </button>
+    <div class="tab-arrow">›</div>
+    <button class="tab-btn" data-tab="tab-step4" role="tab" aria-selected="false">
+      <span class="tab-num">4</span><span class="tab-label">操作マニュアル</span>
+    </button>
+  </nav>
+
+  <!-- ===== TAB 1: AIでCSV作成 ===== -->
+  <div id="tab-step1" class="tab-content active">
+    <div class="container">
+
+      <section class="card">
+        <div class="step-label" data-step="1">STEP 1 — PDF時刻表をAIで中間CSVに変換する</div>
+        <p class="step-desc">ChatGPT等のAIに以下のプロンプトをコピーして、PDF時刻表と一緒に送信してください。AIが4つの中間CSVを作成します。</p>
+
+        <div class="prompt-section">
+          <div class="prompt-header">
+            <span class="prompt-title">AI用プロンプト</span>
+            <button id="copy-prompt-btn" class="btn-secondary">📋 プロンプトをコピー</button>
+          </div>
+          <pre id="ai-prompt" class="prompt-box">あなたはGTFS-JP作成補助AIです。
+添付PDFのコミュニティバス時刻表を読み取り、GTFS-JP Makerに取り込める中間CSVを作成してください。
+
+出力は必ず以下の4つのCSVブロックに分けてください。
+1. routes.csv
+2. stops.csv
+3. timetable.csv
+4. calendar.csv
+
+ルール:
+- 推測した値は notes 列に理由を書く
+- 読み取れない値は空欄にする
+- 時刻は HH:MM 形式に統一する
+- 24時を超える場合は 25:10 のように表記する
+- 停留所IDは S001, S002, S003... の形式にする
+- route_idは R001, R002... の形式にする
+- service_idは weekday, saturday, holiday, everyday などにする
+- 便名が無い場合は 第1便, 第2便... とする
+- 方面がある場合は direction_id 0/1 に分ける
+- PDF内の注記、運休日、運行条件は calendar.csv の description または notes に残す
+- CSV以外の説明文は出力しない
+
+routes.csv の列:
+route_id,route_short_name,route_long_name,direction_id,direction_name,route_color,notes
+
+stops.csv の列:
+stop_id,stop_name,stop_lat,stop_lon,stop_sequence,notes
+
+timetable.csv の列:
+route_id,direction_id,service_id,trip_name,notes,停留所ID列...
+
+calendar.csv の列:
+service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date,description,notes</pre>
+        </div>
+
+        <div class="template-section">
+          <div class="template-header">
+            <span class="template-title">CSVテンプレート（サンプル入り）</span>
+          </div>
+          <div class="template-list">
+            <div class="template-item">
+              <span class="template-name">📄 routes.csv</span>
+              <span class="template-desc">路線情報（route_id, 路線名, 方向など）</span>
+              <button class="btn-dl" data-template="routes">ダウンロード</button>
+            </div>
+            <div class="template-item">
+              <span class="template-name">📄 stops.csv</span>
+              <span class="template-desc">停留所情報（stop_id, 停留所名, 緯度経度など）</span>
+              <button class="btn-dl" data-template="stops">ダウンロード</button>
+            </div>
+            <div class="template-item">
+              <span class="template-name">📄 timetable.csv</span>
+              <span class="template-desc">時刻表（路線・便ごとの通過時刻）</span>
+              <button class="btn-dl" data-template="timetable">ダウンロード</button>
+            </div>
+            <div class="template-item">
+              <span class="template-name">📄 calendar.csv</span>
+              <span class="template-desc">運行カレンダー（曜日・期間設定）</span>
+              <button class="btn-dl" data-template="calendar">ダウンロード</button>
+            </div>
+          </div>
+          <div class="template-note">
+            <button id="dl-all-templates-btn" class="btn-secondary">⬇️ 全テンプレートをまとめてダウンロード</button>
+          </div>
+        </div>
+
+        <div class="next-step-hint">
+          CSVが作成できたら <button class="btn-inline-tab" data-goto="tab-step2">STEP 2 へ →</button>
+        </div>
+      </section>
+
+    </div>
+  </div>
+
+  <!-- ===== TAB 2: CSV → GTFS-JP ===== -->
+  <div id="tab-step2" class="tab-content">
+    <div class="container">
+
+      <!-- CSV Upload -->
+      <section class="card" id="maker-upload-section">
+        <div class="step-label" data-step="2">中間CSV を読み込む</div>
+
+        <div class="csv-upload-grid">
+          <div class="csv-upload-item" id="upload-routes">
+            <div class="csv-label">routes.csv <span class="required">必須</span></div>
+            <label class="csv-drop-zone" for="input-routes">
+              <span class="csv-drop-icon">📄</span>
+              <span class="csv-drop-text">クリックまたはドロップ</span>
+              <input type="file" id="input-routes" accept=".csv" hidden>
+            </label>
+            <div class="csv-status" id="status-routes"></div>
+          </div>
+          <div class="csv-upload-item" id="upload-stops">
+            <div class="csv-label">stops.csv <span class="required">必須</span></div>
+            <label class="csv-drop-zone" for="input-stops">
+              <span class="csv-drop-icon">📄</span>
+              <span class="csv-drop-text">クリックまたはドロップ</span>
+              <input type="file" id="input-stops" accept=".csv" hidden>
+            </label>
+            <div class="csv-status" id="status-stops"></div>
+          </div>
+          <div class="csv-upload-item" id="upload-timetable">
+            <div class="csv-label">timetable.csv <span class="required">必須</span></div>
+            <label class="csv-drop-zone" for="input-timetable">
+              <span class="csv-drop-icon">📄</span>
+              <span class="csv-drop-text">クリックまたはドロップ</span>
+              <input type="file" id="input-timetable" accept=".csv" hidden>
+            </label>
+            <div class="csv-status" id="status-timetable"></div>
+          </div>
+          <div class="csv-upload-item" id="upload-calendar">
+            <div class="csv-label">calendar.csv <span class="required">必須</span></div>
+            <label class="csv-drop-zone" for="input-calendar">
+              <span class="csv-drop-icon">📄</span>
+              <span class="csv-drop-text">クリックまたはドロップ</span>
+              <input type="file" id="input-calendar" accept=".csv" hidden>
+            </label>
+            <div class="csv-status" id="status-calendar"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Preview -->
+      <section class="card hidden" id="maker-preview-section">
+        <div class="step-label" data-step="2">読み込み内容のプレビュー</div>
+        <div class="preview-tabs">
+          <button class="preview-tab-btn active" data-preview="routes">routes</button>
+          <button class="preview-tab-btn" data-preview="stops">stops</button>
+          <button class="preview-tab-btn" data-preview="timetable">timetable</button>
+          <button class="preview-tab-btn" data-preview="calendar">calendar</button>
+        </div>
+        <div id="preview-table-wrap" class="preview-table-wrap"></div>
+      </section>
+
+      <!-- Validation -->
+      <section class="card hidden" id="maker-validation-section">
+        <div class="step-label" data-step="2">検査結果</div>
+        <div id="validation-results"></div>
+      </section>
+
+      <!-- Agency info -->
+      <section class="card hidden" id="maker-agency-section">
+        <div class="step-label" data-step="2">事業者情報（agency.txt）</div>
+        <div class="advanced-grid">
+          <div class="field-group">
+            <label for="agency-id">agency_id</label>
+            <input type="text" id="agency-id" value="A001">
+          </div>
+          <div class="field-group">
+            <label for="agency-name">agency_name <span class="required">必須</span></label>
+            <input type="text" id="agency-name" placeholder="例：○○町コミュニティバス">
+          </div>
+          <div class="field-group">
+            <label for="agency-url">agency_url</label>
+            <input type="text" id="agency-url" value="https://example.com">
+          </div>
+          <div class="field-group">
+            <label for="agency-phone">agency_phone</label>
+            <input type="text" id="agency-phone" placeholder="例：0120-000-000">
+          </div>
+        </div>
+
+        <details class="advanced-options">
+          <summary>feed_info の設定</summary>
+          <div class="advanced-grid">
+            <div class="field-group">
+              <label for="feed-publisher-name">feed_publisher_name</label>
+              <input type="text" id="feed-publisher-name" placeholder="例：○○町">
+            </div>
+            <div class="field-group">
+              <label for="feed-publisher-url">feed_publisher_url</label>
+              <input type="text" id="feed-publisher-url" value="https://example.com">
+            </div>
+            <div class="field-group">
+              <label for="feed-start-date">feed_start_date</label>
+              <input type="date" id="feed-start-date">
+            </div>
+            <div class="field-group">
+              <label for="feed-end-date">feed_end_date</label>
+              <input type="date" id="feed-end-date">
+            </div>
+          </div>
+        </details>
+      </section>
+
+      <!-- Generate -->
+      <section class="card hidden" id="maker-generate-section">
+        <div class="step-label" data-step="2">GTFS-JP ZIP を生成</div>
+        <div id="maker-warning-notice" class="warning-notice hidden"></div>
+        <div class="generate-actions">
+          <button id="generate-btn" class="btn-primary" disabled>GTFS-JP ZIP を生成する</button>
+        </div>
+        <div id="maker-log" class="log-area hidden"></div>
+        <div id="maker-error" class="error-area hidden"></div>
+        <div id="maker-download-group" class="download-group hidden">
+          <button id="download-gtfs-btn" class="btn-download">📥 GTFS-JP ZIP をダウンロード</button>
+          <button id="use-in-step3-btn" class="btn-download btn-download-sub">▶️ このZIPをSTEP 3で使用する</button>
+        </div>
+      </section>
+
+    </div>
+  </div>
+
+  <!-- ===== TAB 3: GTFS-JP → CZML/GeoJSON (既存機能) ===== -->
+  <div id="tab-step3" class="tab-content">
+
+    <!-- Step indicator (既存) -->
+    <div class="step-indicator">
+      <div class="step-item active" id="si-1">
+        <div class="si-circle">1</div>
+        <div class="si-label">ZIPを選択</div>
+      </div>
+      <div class="si-line"></div>
+      <div class="step-item" id="si-2">
+        <div class="si-circle">2</div>
+        <div class="si-label">設定</div>
+      </div>
+      <div class="si-line"></div>
+      <div class="step-item" id="si-3">
+        <div class="si-circle">3</div>
+        <div class="si-label">変換・DL</div>
+      </div>
+    </div>
+
+    <div class="container">
+
+      <!-- Step 1: ZIP upload -->
+      <section class="card" id="step-upload">
+        <div class="step-label" data-step="1">ZIPファイルを選択</div>
+        <div id="step3-from-maker" class="from-maker-notice hidden">
+          <span>✅ STEP 2 で生成したGTFS-JP ZIPが読み込まれています</span>
+          <button id="step3-clear-maker" class="btn-link">別のZIPを選択する</button>
+        </div>
+        <div id="drop-zone" class="drop-zone" role="button" tabindex="0" aria-label="ZIPファイルを選択またはドロップ">
+          <div class="drop-icon">📦</div>
+          <div class="drop-text">クリックまたはここにドラッグ＆ドロップ</div>
+          <div class="drop-sub">GTFS-JP の ZIP ファイル</div>
+          <input type="file" id="file-input" accept=".zip" hidden>
+        </div>
+        <div id="file-info" class="file-info hidden"></div>
+        <div id="file-check" class="file-check hidden"></div>
+      </section>
+
+      <!-- Step 2: Settings -->
+      <section class="card" id="step-settings">
+        <div class="step-label" data-step="2">設定</div>
+
+        <div class="field-group">
+          <label for="service-date">サービス日 <span class="required">必須</span></label>
+          <input type="date" id="service-date" name="service-date">
+        </div>
+
+        <div class="field-group">
+          <label for="route-select">対象路線</label>
+          <select id="route-select" disabled>
+            <option value="">（全路線）</option>
+          </select>
+          <div class="field-hint" id="route-hint">ZIPを読み込むと路線一覧が表示されます</div>
+        </div>
+
+        <div id="route-colors-section" class="hidden">
+          <div class="section-label">路線色の設定</div>
+          <div id="route-colors-list" class="route-colors-list"></div>
+        </div>
+
+        <details class="advanced-options" id="stop-settings">
+          <summary>停留所マーカーの設定</summary>
+          <div class="advanced-grid">
+
+            <div class="field-group">
+              <label for="stop-color">マーカー色</label>
+              <div class="color-with-preview">
+                <input type="color" id="stop-color" value="#00f2ff">
+                <span id="stop-color-hex" class="color-hex-label">#00f2ff</span>
+              </div>
+            </div>
+
+            <div class="field-group">
+              <label for="stop-size">マーカーサイズ</label>
+              <select id="stop-size">
+                <option value="small">small（小）</option>
+                <option value="medium" selected>medium（中）</option>
+                <option value="large">large（大）</option>
+              </select>
+            </div>
+
+            <div class="field-group" style="grid-column: 1 / -1">
+              <label for="stop-symbol">マーカーシンボル（GeoJSON用 Maki アイコン）</label>
+              <select id="stop-symbol">
+                <option value="bus" selected>🚌 bus（バス）</option>
+                <option value="rail">🚃 rail（鉄道）</option>
+                <option value="rail-metro">🚇 rail-metro（地下鉄）</option>
+                <option value="rail-light">🚊 rail-light（路面電車）</option>
+                <option value="airport">✈️ airport（空港）</option>
+                <option value="ferry">⛴ ferry（フェリー）</option>
+                <option value="information">ℹ️ information（案内）</option>
+                <option value="marker">📍 marker（ピン）</option>
+                <option value="circle">⭕ circle（円）</option>
+              </select>
+            </div>
+
+          </div>
+        </details>
+
+        <details class="advanced-options">
+          <summary>詳細オプション</summary>
+          <div class="advanced-grid">
+
+            <div class="field-group">
+              <label for="model-url">モデルURL（GLB/GLTF）</label>
+              <input type="text" id="model-url" placeholder="https://example.com/bus.glb">
+            </div>
+
+            <div class="field-group">
+              <label for="model-scale">モデルスケール</label>
+              <input type="number" id="model-scale" value="1.0" min="0.01" step="0.1">
+            </div>
+
+            <div class="field-group">
+              <label for="line-width">ライン幅</label>
+              <input type="number" id="line-width" value="3" min="1" step="1">
+            </div>
+
+            <div class="field-group">
+              <label for="line-opacity">ライン不透明度 (0〜1)</label>
+              <input type="number" id="line-opacity" value="1.0" min="0" max="1" step="0.1">
+            </div>
+
+            <div class="field-group">
+              <label for="trail">トレイル秒数</label>
+              <input type="number" id="trail" value="0" min="0" step="10">
+            </div>
+
+            <div class="field-group">
+              <label for="sample-every">サンプル間隔（m）</label>
+              <input type="number" id="sample-every" value="50" min="1" step="10">
+            </div>
+
+            <div class="field-group">
+              <label for="fallback-mode">Shape なし便の扱い</label>
+              <select id="fallback-mode">
+                <option value="stops">stops — 停留所直線で代替</option>
+                <option value="none">none — スキップ（描画しない）</option>
+              </select>
+            </div>
+
+          </div>
+        </details>
+      </section>
+
+      <!-- Step 3: Convert -->
+      <section class="card" id="step-convert">
+        <div class="step-label" data-step="3">変換・ダウンロード</div>
+        <button id="convert-btn" class="btn-primary" disabled>変換する</button>
+        <div id="progress-bar" class="progress-bar hidden">
+          <div id="progress-fill" class="progress-fill"></div>
+        </div>
+        <div id="log-area" class="log-area hidden"></div>
+        <div id="error-area" class="error-area hidden"></div>
+        <div id="download-group" class="download-group hidden">
+          <button id="download-czml-btn" class="btn-download">📥 CZML をダウンロード（走行アニメーション）</button>
+          <button id="download-stops-btn" class="btn-download btn-download-sub">📍 stops.geojson をダウンロード（停留所）</button>
+        </div>
+      </section>
+
+    </div>
+  </div>
+
+  <!-- ===== TAB 4: 操作マニュアル ===== -->
+  <div id="tab-step4" class="tab-content">
+    <div class="container">
+      <section class="card">
+        <div class="step-label">操作マニュアル</div>
+
+        <div class="manual-section">
+          <h3>このツールについて</h3>
+          <p>GTFS-JP Maker は、PDF時刻表から CZML / GeoJSON を生成するまでのワークフローを支援するブラウザアプリです。すべての処理はブラウザ上で完結し、データをサーバーに送信しません。</p>
+        </div>
+
+        <div class="manual-section">
+          <h3>STEP 1 — AIでCSV作成</h3>
+          <ol>
+            <li>「プロンプトをコピー」ボタンでAI用プロンプトをコピーします。</li>
+            <li>ChatGPT等のAIチャットを開き、PDF時刻表とプロンプトを貼り付けて送信します。</li>
+            <li>AIが4つのCSVブロック（routes / stops / timetable / calendar）を出力します。</li>
+            <li>各CSVをテキストエディタまたはスプレッドシートで保存します。</li>
+            <li>不明な値（緯度経度など）はAI出力後に手動で補完することを推奨します。</li>
+          </ol>
+        </div>
+
+        <div class="manual-section">
+          <h3>STEP 2 — CSV → GTFS-JP ZIP</h3>
+          <ol>
+            <li>4つのCSVファイル（routes / stops / timetable / calendar）をアップロードします。</li>
+            <li>プレビューで内容を確認します（先頭20行が表示されます）。</li>
+            <li>検査結果を確認し、エラーがある場合はCSVを修正して再アップロードします。</li>
+            <li>事業者名を入力します（必須）。</li>
+            <li>「GTFS-JP ZIP を生成する」ボタンで生成します。</li>
+            <li>「このZIPをSTEP 3で使用する」で直接STEP 3に渡せます。</li>
+          </ol>
+        </div>
+
+        <div class="manual-section">
+          <h3>STEP 3 — GTFS-JP → CZML/GeoJSON</h3>
+          <ol>
+            <li>GTFS-JP ZIPを選択します（STEP 2から自動引き継ぎも可能）。</li>
+            <li>サービス日を選択します（時刻表が存在する日付）。</li>
+            <li>対象路線・停留所マーカーなどを設定します。</li>
+            <li>「変換する」で CZML と stops.geojson を生成します。</li>
+          </ol>
+        </div>
+
+        <div class="manual-section">
+          <h3>中間CSV フォーマット</h3>
+          <table class="manual-table">
+            <thead>
+              <tr><th>ファイル</th><th>必須列</th><th>説明</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>routes.csv</td>
+                <td>route_id, route_short_name, route_long_name</td>
+                <td>路線情報。direction_id は 0（往路）/ 1（復路）</td>
+              </tr>
+              <tr>
+                <td>stops.csv</td>
+                <td>stop_id, stop_name, stop_lat, stop_lon</td>
+                <td>緯度経度が空欄の場合、shapes.txt は生成されません</td>
+              </tr>
+              <tr>
+                <td>timetable.csv</td>
+                <td>route_id, service_id, trip_name + 停留所ID列</td>
+                <td>6列目以降が停留所IDになる列。時刻は HH:MM 形式</td>
+              </tr>
+              <tr>
+                <td>calendar.csv</td>
+                <td>service_id, monday〜sunday, start_date, end_date</td>
+                <td>start_date / end_date は YYYYMMDD 形式</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="manual-section">
+          <h3>検査エラーと対処法</h3>
+          <table class="manual-table">
+            <thead>
+              <tr><th>エラー内容</th><th>対処法</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>必須CSVが読み込まれていない</td><td>4つのCSVをすべてアップロードしてください</td></tr>
+              <tr><td>必須列が存在しない</td><td>CSVの列名を確認してください（テンプレートを参照）</td></tr>
+              <tr><td>stop_id が重複している</td><td>stops.csv の stop_id が一意になるよう修正してください</td></tr>
+              <tr><td>route_id が routes.csv に存在しない</td><td>timetable.csv の route_id と routes.csv の route_id を一致させてください</td></tr>
+              <tr><td>service_id が calendar.csv に存在しない</td><td>timetable.csv の service_id と calendar.csv の service_id を一致させてください</td></tr>
+              <tr><td>timetable.csv の停留所ID列が stops.csv に存在しない</td><td>timetable.csv の列名（S001等）と stops.csv の stop_id を一致させてください</td></tr>
+              <tr><td>時刻形式が不正</td><td>時刻は HH:MM 形式（例: 08:00, 25:10）で入力してください</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+      </section>
+    </div>
+  </div>
+
+  <script src="lib/jszip.min.js"></script>
+  <script src="lib/papaparse.min.js"></script>
+  <script src="gtfs-maker.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
