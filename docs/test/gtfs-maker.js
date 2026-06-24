@@ -87,7 +87,67 @@
   const useInStep3Btn     = document.getElementById('use-in-step3-btn');
   const warningNotice     = document.getElementById('maker-warning-notice');
 
-  // CSV file inputs (with drag-drop support)
+  // ---------- Bulk upload ----------
+  const bulkZone   = document.getElementById('bulk-drop-zone');
+  const bulkInput  = document.getElementById('input-bulk');
+  const bulkStatus = document.getElementById('bulk-status');
+
+  const BULK_KEYS = ['routes', 'stops', 'timetable', 'calendar'];
+
+  function handleBulkFiles(files) {
+    const matched = {};
+    const unmatched = [];
+
+    Array.from(files).forEach(file => {
+      const base = file.name.replace(/\.csv$/i, '').toLowerCase();
+      if (BULK_KEYS.includes(base)) {
+        matched[base] = file;
+      } else {
+        unmatched.push(file.name);
+      }
+    });
+
+    if (Object.keys(matched).length === 0) {
+      bulkStatus.classList.remove('hidden');
+      bulkStatus.innerHTML = `<span class="bulk-chip err">❌ routes / stops / timetable / calendar のいずれにも一致するファイルがありません</span>`;
+      return;
+    }
+
+    // Dispatch to individual inputs so existing load logic runs
+    for (const [key, file] of Object.entries(matched)) {
+      const input = document.getElementById(`input-${key}`);
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      input.files = dt.files;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    // Show chip results
+    bulkStatus.classList.remove('hidden');
+    let chips = BULK_KEYS.map(k =>
+      matched[k]
+        ? `<span class="bulk-chip ok">✅ ${k}.csv</span>`
+        : `<span class="bulk-chip err">未選択: ${k}.csv</span>`
+    ).join('');
+    if (unmatched.length) chips += `<span class="bulk-chip err">⚠ 未認識: ${unmatched.join(', ')}</span>`;
+    bulkStatus.innerHTML = chips;
+
+    if (BULK_KEYS.every(k => matched[k])) {
+      bulkZone.classList.add('all-loaded');
+    }
+  }
+
+  bulkInput.addEventListener('change', e => handleBulkFiles(e.target.files));
+
+  bulkZone.addEventListener('dragover', e => { e.preventDefault(); bulkZone.classList.add('drag-over'); });
+  bulkZone.addEventListener('dragleave', () => bulkZone.classList.remove('drag-over'));
+  bulkZone.addEventListener('drop', e => {
+    e.preventDefault();
+    bulkZone.classList.remove('drag-over');
+    handleBulkFiles(e.dataTransfer.files);
+  });
+
+  // ---------- Individual CSV file inputs (with drag-drop support)
   ['routes', 'stops', 'timetable', 'calendar'].forEach(key => {
     const input = document.getElementById(`input-${key}`);
     const zone  = document.querySelector(`#upload-${key} .csv-drop-zone`);

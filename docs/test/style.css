@@ -728,6 +728,82 @@ input:disabled, select:disabled {
 }
 
 /* ===== STEP 2: CSV upload grid ===== */
+/* ===== Bulk upload ===== */
+.bulk-drop-zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  border: 2px dashed var(--accent);
+  border-radius: 10px;
+  padding: 1.4rem 1rem;
+  text-align: center;
+  cursor: pointer;
+  background: var(--accent-light);
+  transition: border-color 0.15s, background 0.15s;
+  margin-bottom: 0.25rem;
+}
+
+.bulk-drop-zone:hover,
+.bulk-drop-zone.drag-over {
+  border-color: var(--accent-hover);
+  background: #dbeafe;
+}
+
+.bulk-drop-zone.all-loaded {
+  border-color: var(--success);
+  background: var(--success-light);
+}
+
+.bulk-drop-icon { font-size: 1.8rem; }
+
+.bulk-drop-text {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.bulk-drop-hint {
+  font-size: 0.76rem;
+  color: var(--text-sub);
+}
+
+.bulk-status {
+  font-size: 0.8rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.5rem;
+}
+
+.bulk-chip {
+  padding: 0.2rem 0.6rem;
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: 0.75rem;
+}
+
+.bulk-chip.ok  { background: var(--success-light); color: var(--success); border: 1px solid #bbf7d0; }
+.bulk-chip.err { background: #fef2f2; color: var(--error); border: 1px solid #fecaca; }
+
+.bulk-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 1rem 0 0.75rem;
+  color: var(--text-sub);
+  font-size: 0.78rem;
+}
+
+.bulk-divider::before,
+.bulk-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
 .csv-upload-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

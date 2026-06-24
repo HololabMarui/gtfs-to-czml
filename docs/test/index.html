@@ -126,6 +126,17 @@ service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,e
       <section class="card" id="maker-upload-section">
         <div class="step-label" data-step="2">中間CSV を読み込む</div>
 
+        <!-- Bulk upload -->
+        <label class="bulk-drop-zone" id="bulk-drop-zone" for="input-bulk">
+          <span class="bulk-drop-icon">📂</span>
+          <span class="bulk-drop-text">4つのCSVをまとめてドロップ / クリックして選択</span>
+          <span class="bulk-drop-hint">routes.csv・stops.csv・timetable.csv・calendar.csv</span>
+          <input type="file" id="input-bulk" accept=".csv" multiple hidden>
+        </label>
+        <div id="bulk-status" class="bulk-status hidden"></div>
+
+        <div class="bulk-divider"><span>または個別にアップロード</span></div>
+
         <div class="csv-upload-grid">
           <div class="csv-upload-item" id="upload-routes">
             <div class="csv-label">routes.csv <span class="required">必須</span></div>
