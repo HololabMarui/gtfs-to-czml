@@ -119,6 +119,18 @@ async function checkAndLoadZip() {
     return;
   }
 
+  // Auto-detect service date from calendar
+  try {
+    const calRaw      = await readTextFromZipOpt(loadedZip, 'calendar.txt');
+    const calDatesRaw = await readTextFromZipOpt(loadedZip, 'calendar_dates.txt');
+    const calArr      = calRaw      ? parseCsv(calRaw)      : [];
+    const calDatesArr = calDatesRaw ? parseCsv(calDatesRaw) : [];
+    const detected = detectServiceDate(calArr, calDatesArr);
+    if (detected) serviceDate.value = detected;
+  } catch (e) {
+    // non-fatal: keep current date
+  }
+
   // Load routes for dropdown
   try {
     const routesRaw = await readTextFromZip(loadedZip, 'routes.txt');
@@ -549,6 +561,78 @@ function coordAtDist(shape, targetM) {
 
 // --- Calendar: services active on a given date ---
 // Returns Set<service_id>
+// --- Auto-detect best service date from calendar data ---
+function detectServiceDate(calArr, calDatesArr) {
+  if (calArr.length === 0 && calDatesArr.length === 0) return null;
+
+  const wdNames = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
+
+  function ymdStr(d) {
+    return d.toISOString().slice(0, 10);
+  }
+  function toYmd(iso) {
+    return iso.replace(/-/g, '');
+  }
+  function hasService(dateObj) {
+    const iso = ymdStr(dateObj);
+    const ymd = toYmd(iso);
+    // 0=Sun in JS, convert to 0=Mon
+    const wd = (dateObj.getDay() + 6) % 7;
+    let active = false;
+    for (const r of calArr) {
+      if (!r.start_date || !r.end_date) continue;
+      if (r.start_date <= ymd && ymd <= r.end_date) {
+        if (r[wdNames[wd]] === '1') { active = true; break; }
+      }
+    }
+    for (const r of calDatesArr) {
+      if (r.date !== ymd) continue;
+      if (r.exception_type === '1') active = true;
+      else if (r.exception_type === '2') active = false;
+    }
+    return active;
+  }
+
+  // Determine search range from calendar data
+  let minYmd = null, maxYmd = null;
+  for (const r of calArr) {
+    if (r.start_date) { if (!minYmd || r.start_date < minYmd) minYmd = r.start_date; }
+    if (r.end_date)   { if (!maxYmd || r.end_date   > maxYmd) maxYmd = r.end_date; }
+  }
+  for (const r of calDatesArr) {
+    if (r.date) {
+      if (!minYmd || r.date < minYmd) minYmd = r.date;
+      if (!maxYmd || r.date > maxYmd) maxYmd = r.date;
+    }
+  }
+  if (!minYmd) return null;
+
+  const rangeStart = new Date(minYmd.slice(0,4)+'-'+minYmd.slice(4,6)+'-'+minYmd.slice(6,8));
+  const rangeEnd   = new Date(maxYmd.slice(0,4)+'-'+maxYmd.slice(4,6)+'-'+maxYmd.slice(6,8));
+  const today      = new Date(); today.setHours(0,0,0,0);
+
+  // Try today first, then scan forward within range, then scan backward
+  const candidates = [];
+  for (let d = new Date(Math.max(today, rangeStart)); d <= rangeEnd; d.setDate(d.getDate()+1)) {
+    candidates.push(new Date(d));
+    if (candidates.length >= 60) break;
+  }
+  // If nothing found forward (today > rangeEnd), scan backward from rangeEnd
+  if (candidates.length === 0 || candidates[0] > rangeEnd) {
+    for (let d = new Date(rangeEnd); d >= rangeStart; d.setDate(d.getDate()-1)) {
+      candidates.push(new Date(d));
+      if (candidates.length >= 60) break;
+    }
+  }
+
+  for (const d of candidates) {
+    if (hasService(d)) return ymdStr(d);
+  }
+
+  // Fallback: return start of range
+  return ymdStr(rangeStart);
+}
+
 function servicesActiveOn(calArr, calDatesArr, dateStr, serviceDay) {
   const ymd = dateStr.replace(/-/g, '');
   const wdNames = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
