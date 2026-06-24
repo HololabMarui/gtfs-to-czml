@@ -783,8 +783,9 @@ input:disabled, select:disabled {
 }
 
 .csv-status { font-size: 0.78rem; min-height: 1.2em; }
-.csv-ok  { color: var(--success); font-weight: 600; }
-.csv-err { color: var(--error); font-weight: 600; }
+.csv-ok   { color: var(--success); font-weight: 600; }
+.csv-err  { color: var(--error); font-weight: 600; }
+.csv-warn { color: var(--warning); font-weight: 600; }
 
 /* ===== Preview table ===== */
 .preview-tabs {
@@ -863,6 +864,17 @@ input:disabled, select:disabled {
 .val-ok    { background: var(--success-light); color: var(--success); border: 1px solid #bbf7d0; }
 .val-error { background: #fef2f2; color: var(--error); border: 1px solid #fecaca; }
 .val-warn  { background: #fffbeb; color: #92400e; border: 1px solid #fde68a; }
+
+/* ===== Service date auto-set notice ===== */
+.service-date-notice {
+  margin-top: 0.4rem;
+  font-size: 0.8rem;
+  color: #1d4ed8;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  padding: 0.35rem 0.7rem;
+}
 
 /* ===== Warning notice ===== */
 .warning-notice {

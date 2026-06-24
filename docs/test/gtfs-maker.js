@@ -72,6 +72,7 @@
   // State
   const csvData = { routes: null, stops: null, timetable: null, calendar: null };
   let generatedZipBlob = null;
+  let calendarNormWarnings = []; // warnings from last calendar normalization
 
   // DOM
   const previewSection    = document.getElementById('maker-preview-section');
@@ -99,7 +100,15 @@
         skipEmptyLines: true,
         complete: result => {
           csvData[key] = result.data;
-          status.innerHTML = `<span class="csv-ok">✅ ${file.name}（${result.data.length}行）</span>`;
+          let notice = '';
+          if (key === 'calendar') {
+            const norm = normalizeCalendarRows(result.data);
+            calendarNormWarnings = norm.warnings;
+            if (norm.warnings.length) {
+              notice = ' <span class="csv-warn">⚠️ end_date 自動補完あり</span>';
+            }
+          }
+          status.innerHTML = `<span class="csv-ok">✅ ${file.name}（${result.data.length}行）</span>${notice}`;
           zone.classList.add('loaded');
           zone.querySelector('.csv-drop-text').textContent = file.name;
           onAllCSVCheck();
@@ -180,7 +189,7 @@
       routes:    ['route_id', 'route_short_name', 'route_long_name'],
       stops:     ['stop_id', 'stop_name'],
       timetable: ['route_id', 'service_id', 'trip_name'],
-      calendar:  ['service_id', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday', 'start_date', 'end_date'],
+      calendar:  ['service_id', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday', 'start_date'],
     };
     for (const [key, cols] of Object.entries(requiredCols)) {
       const data = csvData[key];
@@ -190,6 +199,16 @@
         if (!actualCols.includes(c)) errors.push(`${key}.csv に必須列「${c}」がありません`);
       });
     }
+
+    if (errors.length) { renderValidation(errors, warnings); updateGenerateBtn(errors, warnings); return; }
+
+    // Calendar date normalization & validation
+    // normalizeCalendarRows already ran on load and mutated end_date values;
+    // re-run to catch errors on any remaining invalid rows
+    const norm = normalizeCalendarRows(calendar);
+    norm.errors.forEach(e => errors.push(e));
+    // Use stored warnings from load time (mutation already happened, so re-run won't re-warn)
+    calendarNormWarnings.forEach(w => warnings.push(w));
 
     if (errors.length) { renderValidation(errors, warnings); updateGenerateBtn(errors, warnings); return; }
 
@@ -295,6 +314,12 @@
       const calendar  = csvData.calendar;
       const stopCols  = getStopCols(timetable);
 
+      // Re-run calendar normalization before generation (in case data was modified)
+      const norm = normalizeCalendarRows(calendar);
+      if (norm.errors.length) {
+        throw new Error('calendar.csv にエラーがあります:\n' + norm.errors.join('\n'));
+      }
+
       log('agency.txt を生成中...');
       zip.file('agency.txt', makeAgencyTxt());
       log('routes.txt を生成中...');
@@ -385,9 +410,72 @@
   function makeCalendarTxt(calendar) {
     let out = csvLine(['service_id', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday', 'start_date', 'end_date']);
     calendar.forEach(r => {
+      // end_date is already normalized by normalizeCalendarRows before generation
       out += csvLine([r.service_id, r.monday || '0', r.tuesday || '0', r.wednesday || '0', r.thursday || '0', r.friday || '0', r.saturday || '0', r.sunday || '0', r.start_date || '', r.end_date || '']);
     });
     return out;
+  }
+
+  // ---------- Calendar normalization helpers ----------
+  function isValidYyyymmdd(value) {
+    if (!/^\d{8}$/.test(value)) return false;
+    const y = Number(value.slice(0, 4));
+    const m = Number(value.slice(4, 6));
+    const d = Number(value.slice(6, 8));
+    const date = new Date(Date.UTC(y, m - 1, d));
+    return date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 && date.getUTCDate() === d;
+  }
+
+  function calcOneYearMinusOneDay(startYyyymmdd) {
+    const y = Number(startYyyymmdd.slice(0, 4));
+    const m = Number(startYyyymmdd.slice(4, 6));
+    const d = Number(startYyyymmdd.slice(6, 8));
+    const date = new Date(Date.UTC(y + 1, m - 1, d));
+    date.setUTCDate(date.getUTCDate() - 1);
+    return String(date.getUTCFullYear()) +
+      String(date.getUTCMonth() + 1).padStart(2, '0') +
+      String(date.getUTCDate()).padStart(2, '0');
+  }
+
+  function normalizeCalendarRows(calendarRows) {
+    const warnings = [];
+    const errors = [];
+    const dayNames = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+
+    for (const row of calendarRows) {
+      const serviceId = String(row.service_id || '').trim() || '(service_id未設定)';
+      const start = String(row.start_date || '').trim();
+      let end = String(row.end_date || '').trim();
+
+      if (!start) {
+        errors.push(`calendar.csv の start_date が空欄です: ${serviceId}`);
+        continue;
+      }
+      if (!isValidYyyymmdd(start)) {
+        errors.push(`calendar.csv の start_date が不正です（YYYYMMDD形式）: ${serviceId} / ${start}`);
+        continue;
+      }
+
+      if (!end) {
+        end = calcOneYearMinusOneDay(start);
+        row.end_date = end;
+        warnings.push(`calendar.csv の end_date が空欄だったため自動設定しました: ${serviceId} ${start} → ${end}`);
+      } else if (!isValidYyyymmdd(end)) {
+        errors.push(`calendar.csv の end_date が不正です（YYYYMMDD形式）: ${serviceId} / ${end}`);
+        continue;
+      } else if (end < start) {
+        errors.push(`calendar.csv の end_date が start_date より前です: ${serviceId} ${start} → ${end}`);
+      }
+
+      dayNames.forEach(day => {
+        const val = String(row[day] ?? '').trim();
+        if (val !== '0' && val !== '1') {
+          errors.push(`calendar.csv の ${day} は 0 または 1 を指定してください: service_id=${serviceId} / 値=${val || '空欄'}`);
+        }
+      });
+    }
+
+    return { rows: calendarRows, warnings, errors };
   }
 
   function makeShapesTxt(routes, stops, stopCols, timetable) {

@@ -131,6 +131,7 @@ async function checkAndLoadZip() {
   // Auto-adjust service date if today falls outside the calendar range
   try {
     const calRaw = await readTextFromZipOpt(loadedZip, 'calendar.txt');
+    const notice = document.getElementById('service-date-notice');
     if (calRaw) {
       const calRows = parseCsv(calRaw);
       if (calRows.length > 0) {
@@ -140,10 +141,19 @@ async function checkAndLoadZip() {
           const dates = calRows.map(r => r.start_date).filter(Boolean).sort();
           if (dates.length > 0) {
             const d = dates[0];
-            serviceDate.value = `${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6,8)}`;
+            const autoDate = `${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6,8)}`;
+            serviceDate.value = autoDate;
+            if (notice) {
+              notice.textContent = `calendar.txt の start_date に基づき、サービス日を ${autoDate} に自動設定しました。`;
+              notice.classList.remove('hidden');
+            }
           }
+        } else {
+          if (notice) notice.classList.add('hidden');
         }
       }
+    } else {
+      if (notice) notice.classList.add('hidden');
     }
   } catch (e) {
     // non-fatal
@@ -321,7 +331,40 @@ async function buildCzml({ date }) {
   if (!ignoreCalendar) trips = trips.filter(t => activeServices.has(t.service_id));
 
   if (trips.length === 0) {
-    throw new Error(`有効な trip が見つかりません。service-date (${date}) に運行する便がないか、route_id の指定を確認してください。`);
+    const wdNames = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
+    const ymd = date.replace(/-/g, '');
+    let diag = `有効な trip が見つかりません。\n\n指定日：${date}\n`;
+
+    if (calArr.length > 0) {
+      diag += '\ncalendar.txt:\n';
+      for (const r of calArr) {
+        const sd = r.start_date ? `${r.start_date.slice(0,4)}-${r.start_date.slice(4,6)}-${r.start_date.slice(6,8)}` : '?';
+        const ed = r.end_date   ? `${r.end_date.slice(0,4)}-${r.end_date.slice(4,6)}-${r.end_date.slice(6,8)}`   : '空欄';
+        const activeDays = wdNames.filter(d => r[d] === '1').map(d => d.slice(0,3)).join('・');
+        diag += `- ${r.service_id}: ${sd}〜${ed}（${activeDays || '運行なし'}）\n`;
+        const inRange = r.start_date && r.end_date && r.start_date <= ymd && ymd <= r.end_date;
+        if (!inRange) diag += `  ⚠ 指定日は運行期間外です。\n`;
+        else if (!activeServices.has(r.service_id)) diag += `  ⚠ 指定日の曜日フラグが0です。\n`;
+      }
+    }
+
+    if (routeFilter) {
+      const matchingTripsBeforeFilter = tripsArr.filter(t => activeServices.has(t.service_id) || ignoreCalendar);
+      if (matchingTripsBeforeFilter.length > 0) {
+        diag += `\nroute_id フィルタ（${routeFilter.join(',')}）で除外された可能性があります。「全路線」に戻して再試行してください。`;
+      }
+    }
+
+    if (calArr.length > 0 && activeServices.size > 0) {
+      const calSvcIds = new Set(calArr.map(r => r.service_id));
+      const tripSvcIds = new Set(tripsArr.map(t => t.service_id));
+      const mismatched = [...tripSvcIds].filter(id => !calSvcIds.has(id));
+      if (mismatched.length) {
+        diag += `\ntrips.txt の service_id（${mismatched.join(', ')}）が calendar.txt に存在しません。`;
+      }
+    }
+
+    throw new Error(diag);
   }
   log(`🚌 対象 trip: ${trips.length} 件`, 'info');
   setProgress(35);
