@@ -128,6 +128,27 @@ async function checkAndLoadZip() {
     // non-fatal
   }
 
+  // Auto-adjust service date if today falls outside the calendar range
+  try {
+    const calRaw = await readTextFromZipOpt(loadedZip, 'calendar.txt');
+    if (calRaw) {
+      const calRows = parseCsv(calRaw);
+      if (calRows.length > 0) {
+        const todayYmd = serviceDate.value.replace(/-/g, '');
+        const anyActive = calRows.some(r => r.start_date && r.end_date && r.start_date <= todayYmd && todayYmd <= r.end_date);
+        if (!anyActive) {
+          const dates = calRows.map(r => r.start_date).filter(Boolean).sort();
+          if (dates.length > 0) {
+            const d = dates[0];
+            serviceDate.value = `${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6,8)}`;
+          }
+        }
+      }
+    }
+  } catch (e) {
+    // non-fatal
+  }
+
   convertBtn.disabled = false;
   hideError();
 }
